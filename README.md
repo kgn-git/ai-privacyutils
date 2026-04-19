@@ -163,7 +163,7 @@ Tests pin the ordering with adversarial fixtures (`src/__tests__/sanitize-pii.te
 
 ## Known Limitations (C2 per compliance review)
 
-v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/IT/ES/PT + UK) and **R2** (EU-native mobile + landline phone formats via `libphonenumber-js`). Residual gaps after v1.1 are documented below with narrowed scope.
+v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/IT/ES/PT + UK), **R2** (EU-native mobile + landline phone formats via `libphonenumber-js`), **R5** (IDN email addresses), **R7** (ReDoS risk on adversarial input — runtime input-length cap, see S12 in Security posture), and **R8** (replacement-token collision — opt-in `tokenFormat: 'sentinel'`). Residual gaps after v1.1 are documented below with narrowed scope.
 
 | Ref | Gap | Severity | v1.1 status | Planned |
 |---|---|---|---|---|
@@ -173,6 +173,7 @@ v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/I
 | R2-residual | Non-EU locales (US, CA, AU, IN, JP, …) still handled by the NANP-shape fallback only — recall degraded for non-NANP international numbers outside the six EU locales. Very short digit runs without phone formatting (bare `12345678` with no separators, no country code) are intentionally NOT redacted — libphonenumber-js metadata would accept them as valid DE short-codes but this over-redacts SKUs / order-IDs in CV free text. Guard rationale: `PHONE_FORMATTED_RE` heuristic in `sanitize-pii.ts`. | Low | Not mitigated | v1.2 — extend `phoneByLocale` to additional countries based on consumer demand |
 | R3 | Applicant's full name in CV header flows unredacted. Regex is an inappropriate tool (CVs are lists of proper nouns — company names, universities, referees). NER is the right tool. | Medium | Not mitigated | v1.2 — NER-based name redaction (Microsoft Presidio or equivalent) |
 | R5 | ~~IDN email addresses with non-ASCII local or domain part (`françois@école.fr`, `user@münchen.de`) pass through unredacted.~~ **Resolved in v1.1** via Unicode property escapes (`\p{L}\p{N}`) + `u` flag + negative-lookahead Unicode boundary in `emailPattern()`. IDN local parts (RFC 6531 / SMTPUTF8), IDN domains (RFC 5892 / IDNA 2008), Unicode TLDs (`.中国`), and punycode-encoded (`xn--…`) addresses all redact correctly. Greedy `{2,24}` TLD consumption over-redacts email-shaped Unicode tokens — correct privacy trade-off (see `src/__tests__/idn-email.test.ts`). | Low | **Resolved** | v1.1 (this release) |
+| R7 | ~~ReDoS risk on adversarial input. Static CI lint (`recheck` + `eslint-plugin-redos`) catches known super-linear shapes but can miss novel combinations, especially around Unicode property escapes.~~ **Resolved in v1.1** via runtime input-length cap (`sanitizePii`/`createPiiMiddleware` `{ maxInputLength }`, default `DEFAULT_MAX_INPUT_LENGTH` = 500_000 code units). O(1) gate runs BEFORE any regex; over-cap inputs throw `PiiInputTooLargeError`. See ADR 002 (`docs/adr/002-input-length-cap.md`) and S12 in Security posture. | Medium | **Resolved** | v1.1 (this release) |
 | R10 | National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors. | Low | Not mitigated | v1.2 — national-ID pattern set |
 | R8 | ~~Replacement tokens `[email]` / `[phone]` / `[address]` / `[postcode]` / `[dob]` collide with user-authored literal strings. Not cryptographically distinguishable from authored text.~~ **Resolved in v1.1** via opt-in `tokenFormat: 'sentinel'` option — produces `<<REDACTED_X>>` low-collision tokens. Default remains `'readable'` (v1.0.0 byte-identical); default swap to sentinel deferred to v2.0 for SemVer. | Low | **Resolved (opt-in)** | v1.1 (this release) |
 
@@ -196,6 +197,7 @@ This package is a canonical compliance control on the LLM prompt edge. A silent 
 - **S8 — Socket.dev GitHub App.** Behavioural analysis of every new dep (install scripts, network access, filesystem writes, typosquat).
 - **S9 — Org 2FA enforcement.** `kgn-git` organisation enforces 2FA on all members.
 - **S10 — Consumer-side typosquat defence.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry lookup, so typosquat on `npm.pkg.github.com` is not a threat surface. Replaced by consumer **exact-tag git-ref pinning** in `package.json` (e.g. `"@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v1.0.0"`) — npm resolves the named tag from the pinned GitHub repo directly; no registry intermediary; upgrades are explicit PR-gated ref bumps.
+- **S12 — Runtime input-length cap (v1.1, issue #10).** Belt-and-braces ReDoS defence. Every call to `sanitizePii(text, options?)` enforces `text.length <= options.maxInputLength` (default `DEFAULT_MAX_INPUT_LENGTH` = 500_000 JS string code units, ~500 KB ASCII) with an O(1) gate that runs BEFORE any regex. Over-cap inputs throw `PiiInputTooLargeError` with numeric `.inputLength` and `.maxInputLength` props. `createPiiMiddleware({ maxInputLength })` threads the cap into every internal `sanitizePii` call applied to prompt / message-content / text-part / reasoning-part strings; the cap is enforced **per part** (one regex pass = one bounded cost), not summed across a prompt. Complements S5 (static `recheck` lint): S5 catches known super-linear shapes at CI time; S12 bounds worst-case CPU at runtime regardless of static-analysis gaps. Full design in `docs/adr/002-input-length-cap.md`.
 
 Full security review: `jobflow-programme/docs/security-reviews/SecurityReview-2026-04-19-privacy-utils-v1.0.0-hardening.md`.
 
@@ -224,11 +226,14 @@ Every tag cuts from `main` via a signed annotated tag (see S3). The CHANGELOG re
 
 Pure, one-way redaction. Idempotent. Empty input returns empty string. Non-PII input returns input unchanged.
 
-Options (v1.1 — issue #9):
+Options:
 
-- `options.tokenFormat?: 'readable' | 'sentinel'` — defaults to `'readable'` (v1.0.0 byte-identical). Pass `'sentinel'` for `<<REDACTED_X>>` low-collision tokens. See the Opt-in sentinel tokens section above.
+- `options.tokenFormat?: 'readable' | 'sentinel'` (v1.1 — issue #9) — defaults to `'readable'` (v1.0.0 byte-identical). Pass `'sentinel'` for `<<REDACTED_X>>` low-collision tokens. See the Opt-in sentinel tokens section above.
+- `options.maxInputLength?: number` (v1.1 — issue #10) — defaults to `DEFAULT_MAX_INPUT_LENGTH` (500_000 JS string code units). Over-cap input throws `PiiInputTooLargeError` BEFORE any regex runs — belt-and-braces ReDoS defence, see S12 in Security posture and `docs/adr/002-input-length-cap.md`.
 
-`SanitizePiiOptions` and `TokenFormat` are re-exported types.
+Throws: `PiiInputTooLargeError` when `text.length > maxInputLength`. The error carries numeric `.inputLength` and `.maxInputLength` props and is an `instanceof Error`.
+
+`SanitizePiiOptions`, `TokenFormat`, `PiiInputTooLargeError`, and `DEFAULT_MAX_INPUT_LENGTH` are exported.
 
 ### `piiPatterns`
 
@@ -255,13 +260,20 @@ Vercel AI SDK v4 middleware. Implements `transformParams` for both `type: 'gener
 
 ### `createPiiMiddleware(options?: PiiMiddlewareOptions): LanguageModelV1Middleware`
 
-Middleware factory (v1.1 — issue #9). Accepts `{ tokenFormat?: 'readable' | 'sentinel' }` and threads the format through every `sanitizePii` call inside `transformParams`. Use this to register a sentinel-format middleware:
+Middleware factory. Accepts `{ tokenFormat?, maxInputLength? }` and threads both options through every `sanitizePii` call inside `transformParams`. Register a bespoke middleware:
 
 ```ts
-const mw = createPiiMiddleware({ tokenFormat: 'sentinel' });
+// Low-collision sentinel tokens + tighter 100 KB cap for an endpoint that
+// only handles summaries:
+const mw = createPiiMiddleware({
+  tokenFormat: 'sentinel',
+  maxInputLength: 100_000,
+});
 ```
 
-See also: `TOKEN_FORMATS` (constant), `tokensFor(format)` (resolver helper), and the `TokenFormat` / `TokenKind` / `PiiMiddlewareOptions` / `SanitizePiiOptions` type exports.
+The `maxInputLength` cap (v1.1 — issue #10) applies per individual text string (each string prompt, each string message content, each text / reasoning part) — NOT summed across all parts of a prompt. Over-cap content causes `sanitizePii` to throw `PiiInputTooLargeError`, which propagates unwrapped out of `transformParams`.
+
+See also: `TOKEN_FORMATS` (constant), `tokensFor(format)` (resolver helper), and the `TokenFormat` / `TokenKind` / `PiiMiddlewareOptions` / `SanitizePiiOptions` type exports. `PiiInputTooLargeError` (class) and `DEFAULT_MAX_INPUT_LENGTH` (const) are exported from the top-level package.
 
 ## Contributing
 

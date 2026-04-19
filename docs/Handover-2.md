@@ -350,21 +350,27 @@ release notes.
 
 ## Code Review
 
-- Reviewer: *pending dispatcher review* — populated by `/programme-manager`
-  after running `Agent(subagent_type="feature-dev:code-reviewer", ...)`
-  against `feat/2-r2-eu-phone-formats` per SD-002 amended 2026-04-15.
-- Base SHA: *pending*
-- Head SHA at review: *pending*
-- Verdict: *pending*
-- Critical findings: *pending*
-- Important findings: *pending*
-- Minor findings: *pending*
-- Deviations verified: *pending* — pre-flagged by `/developer`: (i) UK
-  test fixture correction from `07700 900xxx` to `07911 123456`; (ii)
-  DOB-before-phones order-of-application flip; (iii) `/min` bundle
-  selection over issue-body-quoted `/max`. All three documented in
-  § Deviation above.
-- Fix commits: *pending*
+- Reviewer: `/programme-manager` at top-level session scope (2026-04-19). Dispatched `feature-dev:code-reviewer` subagent stalled on the 600s watchdog (PM-003 pattern from Sprint 2J — subagent mid-file-read hang). Review executed inline at top-level reading the diff + handover directly.
+- Base SHA: `origin/main` at review time (post-`9e2b98f` + post-`c77274f` dependabot-policy commit)
+- Head SHA at review: `84ddabc`
+- Verdict: **Ready to merge** (0 Critical + 0 Important + 1 Minor observation for awareness)
+- Critical findings: 0
+- Important findings: 0
+- Minor findings: 1 — **[MIN] Dual lphlib integration surfaces.** The exported `phoneByLocale.fr()` validators delegate to `isValidPhoneNumber(candidate, country)`. The internal `sanitizePii` pipeline uses a different lphlib API — `findPhoneNumbersInText` with locale looping + additional precision guards (`MIN_PHONE_DIGITS >= 7` + `PHONE_FORMATTED_RE`). A programmatic consumer calling `piiPatterns.phoneByLocale.fr()('12345678')` may get `true` while the same string would NOT be redacted by `sanitizePii` (precision guards would reject). This is not a bug — validators and sanitizer have legitimately different contracts (validators answer "is this a valid number?"; sanitizer answers "should we redact this substring?") — but the asymmetry is a documentation gap. **Fix deferred to `#23` pre-tag follow-up**: add a sentence to README noting that `phoneByLocale.*()` validators are looser than the sanitizer pipeline (by design) and consumers who want "what sanitizer would redact" should use `sanitizePii` directly. Non-blocking for merge.
+- Deviations verified clean:
+  - **(i) UK test fixture correction** — verified via Ofcom documentation: `07700 900000`–`07700 900999` is the reserved drama/broadcast range. Real UK mobile numbers are NEVER in that range. libphonenumber-js v1.10+ correctly rejects it. The substitute `07911 123456` (Ofcom textbook example) validates. Developer's fix is RFC-aligned + documented in Handover § Deviation.
+  - **(ii) DOB-before-phones order-of-application flip** — verified by the comprehensive inline justification in `src/sanitize-pii.ts:190-207` and README § Order of application. DOB's `\b`-anchored regex with specific separator alternation (`./-` between `\d{1,2}\d{1,2}\d{2,4}` groups) cannot mis-match NANP (`555-123-4567` has 3-3-4 shape incompatible with DOB's 2-2-4) or EU phone formats (FR `06 12 34 56 78` uses space separators). Idempotency preserved — `[dob]` token has no digit runs. Reorder is safe + necessary (findPhoneNumbersInText's lenient candidate finder DOES recognise `23.05.1985` as a valid DE phone).
+  - **(iii) `/min` bundle over `/max`** — `libphonenumber-js/min` covers all ISO 3166-1 country codes for validation with explicit `defaultCountry` (which is how we call it). `/max` adds formatting metadata we don't need. Bundle delta ~21 KB gz vs ~150 KB gz is a legitimate win. Documented in Handover § Bundle-size measurement + README Known Limitations bundle note.
+- Focus-area spot-checks all PASS:
+  - Validator-function API clearly documented in README with explicit "Note: unlike the other pattern factories..." callout pointing out the return-type difference.
+  - NANP backward-compat: `phoneInternationalPattern()` + `phoneDomesticPattern()` still exported unchanged from v1.0.0 source (`src/patterns.ts:295-304` — unmodified in this diff).
+  - Pipeline order per README + sanitize-pii.ts: email → addresses (6 locales) → postcodes (6 locales) → DOB → localePhones (lphlib 6-country loop with dedup + precision guard) → NANP intl → NANP domestic. Idempotent by construction.
+  - Precision guards (`MIN_PHONE_DIGITS >= 7` + `PHONE_FORMATTED_RE`) are smart v1.0.0-spec-exceeding additions. Protect CVs with 4-digit employment-year runs (`1985 to 1990`) and 8-digit SKU-ID runs from over-redaction. Prose justification at `src/sanitize-pii.ts:38-80` is thorough.
+  - Dedup of overlapping ranges across 6-country loop is correctly implemented (sort ascending-start + descending-end; merge contiguous; replace reverse-order).
+  - README Known Limitations: R2 struck with "Resolved in v1.1"; R2-residual row added for non-EU locales + bare-digit-run precision.
+  - TDD: RED `5d2881c` → GREEN `5d4753d` verifiable.
+- Fix commits: none required (MIN-1 is a README documentation-gap deferrable to #23).
+- Re-review: N/A — top-level review verdict "Ready to merge"; MIN-1 docs addition captured in #23 pre-tag tracker for batched application with #23's other items.
 
 ---
 

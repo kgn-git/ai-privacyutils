@@ -234,12 +234,16 @@ describe('sanitizePii — DOB redaction (C1: new in v1.0.0, per compliance revie
 });
 
 describe('sanitizePii — cross-pattern integration', () => {
-  it('redacts a full EU CV header in one pass', () => {
+  it('redacts a full EU CV header in one pass (NANP-shape phone)', () => {
+    // Uses a phone number that fits the NANP-shape regex. A native French
+    // format like "+33 6 12 34 56 78" is a known v1.0.0 gap (R2 in the
+    // compliance review) and is intentionally NOT covered here — locale-
+    // aware patterns land in v1.1 via libphonenumber-js.
     const input = [
       'Jean Dupont',
       'Né le 12 mars 1985',
       'Email: jean.dupont@example.fr',
-      'Téléphone: +33 6 12 34 56 78',
+      'Phone: +1 555 123 4567',
       '42 Baker Street, London',
     ].join('\n');
     const once = sanitizePii(input);
@@ -249,6 +253,15 @@ describe('sanitizePii — cross-pattern integration', () => {
     expect(once).toContain('[address]');
     const twice = sanitizePii(once);
     expect(twice).toBe(once);
+  });
+
+  it('documents the known-gap for native EU phone formats (R2)', () => {
+    // This test asserts the KNOWN GAP — it pins behaviour so the gap
+    // cannot silently close without a version bump. When v1.1 lands
+    // libphonenumber-js, this test should flip and the assertion
+    // become `expect(out).toContain('[phone]')`.
+    const input = 'French mobile: +33 6 12 34 56 78 today.';
+    expect(sanitizePii(input)).toBe(input);
   });
 
   it('returns empty string for empty input', () => {

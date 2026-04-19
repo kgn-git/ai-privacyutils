@@ -6,6 +6,9 @@
  * Complements eslint-plugin-redos by surfacing findings as a dedicated
  * required status check.
  *
+ * v1.1 expands the scan from 5 patterns (v1.0.0) to 16 (adds 5 locale
+ * address factories + 6 postcode factories per #1 R1 resolution).
+ *
  * Usage: `npm run redos:scan` or `node scripts/redos-scan.mjs`.
  */
 import { check } from 'recheck';
@@ -13,6 +16,17 @@ import { check } from 'recheck';
 import {
   emailPattern,
   addressPattern,
+  addressFrPattern,
+  addressDePattern,
+  addressItPattern,
+  addressEsPattern,
+  addressPtPattern,
+  postcodeUkPattern,
+  postcodeFrPattern,
+  postcodeDePattern,
+  postcodeItPattern,
+  postcodeEsPattern,
+  postcodePtPattern,
   phoneInternationalPattern,
   phoneDomesticPattern,
   dobPattern,
@@ -22,7 +36,18 @@ import {
 // underlying /g RegExp that recheck will analyse.
 const targets = [
   ['emailPattern', emailPattern()],
-  ['addressPattern', addressPattern()],
+  ['addressPattern (EN)', addressPattern()],
+  ['addressFrPattern', addressFrPattern()],
+  ['addressDePattern', addressDePattern()],
+  ['addressItPattern', addressItPattern()],
+  ['addressEsPattern', addressEsPattern()],
+  ['addressPtPattern', addressPtPattern()],
+  ['postcodeUkPattern', postcodeUkPattern()],
+  ['postcodeFrPattern', postcodeFrPattern()],
+  ['postcodeDePattern', postcodeDePattern()],
+  ['postcodeItPattern', postcodeItPattern()],
+  ['postcodeEsPattern', postcodeEsPattern()],
+  ['postcodePtPattern', postcodePtPattern()],
   ['phoneInternationalPattern', phoneInternationalPattern()],
   ['phoneDomesticPattern', phoneDomesticPattern()],
   ['dobPattern', dobPattern()],

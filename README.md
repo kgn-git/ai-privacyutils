@@ -97,26 +97,47 @@ This package does not create a new Art. 13 disclosure obligation. Platform-side 
 | Export (call with `()`) | Matches | Replacement token |
 |---|---|---|
 | `piiPatterns.email()` | `local@domain.tld` (RFC 5321-bounded, ASCII only) | `[email]` |
-| `piiPatterns.address()` | US/UK number-first street address with English terminator (Street / Avenue / …) and optional direction suffix; accepts mixed-case street names (e.g. `McLane Drive`, `LA Cienega Boulevard`) | `[address]` |
+| `piiPatterns.address()` (alias for `addressByLocale.en()`) | US/UK number-first street address with English terminator (Street / Avenue / …) and optional direction suffix; accepts mixed-case street names (e.g. `McLane Drive`, `LA Cienega Boulevard`) | `[address]` |
+| `piiPatterns.addressByLocale.fr()` | French number-first with lowercase or capitalised street keyword (`rue`, `Boulevard`, `avenue`, `place`, `allée`, `chemin`, `impasse`, `quai`, `route`, `cours`, `square`, `bd.`, `av.`), optional `bis`/`ter`/`quater` modifier. Example: `12 rue de la Paix`, `5 Boulevard Saint-Germain`. | `[address]` |
+| `piiPatterns.addressByLocale.de()` | German compound-suffix form (name ending in `-straße` / `-strasse` / `-str.` / `-platz` / `-weg` / `-allee` / `-gasse` / `-ring` / `-damm`) followed by house number. Example: `Hauptstraße 23`, `Müllerstr. 12`, `Alexanderplatz 5`. | `[address]` |
+| `piiPatterns.addressByLocale.it()` | Italian prefix-keyword form (`Via`, `Viale`, `Corso`, `Piazza`, `Piazzale`, `Largo`, `Vicolo`, `Strada`, `Borgo`, `Contrada`, `Località`) followed by 1-5 name tokens and house number. Example: `Via Roma 15`, `Piazza del Duomo 7`. | `[address]` |
+| `piiPatterns.addressByLocale.es()` | Spanish prefix form (`Calle`, `C/`, `Avenida`, `Av.`, `Avda.`, `Plaza`, `Pza.`, `Paseo`, `Ronda`, `Travesía`, `Camino`, `Carrer`, `Glorieta`) + name tokens + number. Example: `Calle Mayor 10`, `Avenida de la Constitución 5`, `Av. Diagonal 220`. | `[address]` |
+| `piiPatterns.addressByLocale.pt()` | Portuguese prefix form (`Rua`, `R.`, `Avenida`, `Av.`, `Praça`, `Largo`, `Travessa`, `Alameda`, `Beco`, `Estrada`, `Calçada`) + name tokens + number. Example: `Rua das Flores 45`, `Avenida da Liberdade 110`. | `[address]` |
+| `piiPatterns.postcodeByLocale.uk()` | UK alphanumeric postcode (`A[A]N[A/N] NAA` — outward+inward). Example: `SW1A 2AA`, `EC1A 1BB`, `M1 1AE`, `W1A 0AX`. | `[postcode]` |
+| `piiPatterns.postcodeByLocale.fr()` | French 5-digit postcode followed by a capitalised city token (the city is consumed as part of the match to redact the re-identification surface in full). Example: `75001 Paris`, `69002 Lyon`. | `[postcode]` |
+| `piiPatterns.postcodeByLocale.de()` | German 5-digit + city. Example: `80331 München`, `10115 Berlin`. | `[postcode]` |
+| `piiPatterns.postcodeByLocale.it()` | Italian CAP 5-digit + city. Example: `00100 Roma`, `20121 Milano`. | `[postcode]` |
+| `piiPatterns.postcodeByLocale.es()` | Spanish 5-digit + city. Example: `28013 Madrid`, `08001 Barcelona`. | `[postcode]` |
+| `piiPatterns.postcodeByLocale.pt()` | Portuguese NNNN-NNN with optional city (shape is distinctive enough to match bare). Example: `1200-195 Lisboa`, `4050-123 Porto`, `1200-195`. | `[postcode]` |
 | `piiPatterns.phoneInternational()` | `+?CC-3-3-4` NANP-shape | `[phone]` |
 | `piiPatterns.phoneDomestic()` | `3-3-4` NANP-shape fallback | `[phone]` |
 | `piiPatterns.dob()` | Numeric `DD.MM.YYYY` / `DD/MM/YYYY` / `DD-MM-YYYY` / `YYYY-MM-DD` + named-month EN/FR/DE/IT/ES/PT | `[dob]` |
 
-Order of application in `sanitizePii`: **email → address → intlPhone → domesticPhone → dob**. This order is mandatory — swapping phone before address causes the phone pattern to eat the house number in a street address; swapping dob before phone causes numeric `DD.MM.YYYY` sequences to be mis-matched as phone digit runs. Tests pin the ordering with adversarial fixtures.
+Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → intlPhone → domesticPhone → dob**. This order is mandatory:
+
+- Addresses run **before** postcodes so a full structured address like `12 rue de la Paix, 75001 Paris` consumes the street run first; the residual `75001 Paris` is then redacted by the postcode pass.
+- Addresses also run **before** phone so the leading house number is not eaten by the phone pattern.
+- Postcodes run **before** phone — 5-digit continental postcodes and UK/PT alphanumerics are disjoint from the NANP phone shape, but ordering is pinned for future-proofing.
+- DOB runs **last** — numeric `DD.MM.YYYY` sequences would be mis-matched as phone digit runs if DOB ran earlier.
+
+Tests pin the ordering with adversarial fixtures (`src/__tests__/sanitize-pii.test.ts`, `src/__tests__/locale-patterns.test.ts`).
 
 ## Known Limitations (C2 per compliance review)
 
-**The v1.0.0 pattern scope materially under-covers non-English PII for Jobflow's six-locale product (EN / FR / DE / IT / ES / PT).** The following are documented gaps that consuming apps SHOULD mitigate with caller-level scrubbing for non-English content until v1.1 ships locale-aware patterns via [`libphonenumber-js`](https://github.com/catamphetamine/libphonenumber-js) and per-locale regex sets.
+v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/IT/ES/PT + UK). Residual gaps after v1.1 are documented below with narrowed scope.
 
-| Ref | Gap | Severity | v1.0.0 status | Planned |
+| Ref | Gap | Severity | v1.1 status | Planned |
 |---|---|---|---|---|
-| R1 | Non-English postal addresses (FR `rue de la Paix`, DE `Hauptstraße 23`, IT `Via Roma 15`, ES `Calle Mayor 10`, PT `Rua das Flores 45`) pass through unredacted. Postal codes alone (UK `SW1A 2AA`, FR `75001`, DE `80331`) not covered. | High | Not mitigated | v1.1 — locale-aware address regex sets |
-| R2 | EU-native mobile phone formats (FR `06 12 34 56 78` 2-2-2-2-2 grouping, DE `030 12345678` 3+8 variable, UK `07700 900123` 5+6, IT / ES / PT CC-prefixed groupings) systematically under-match the NANP-shape regex. | High | Not mitigated | v1.1 — `libphonenumber-js` integration |
+| R1 | ~~Non-English postal addresses pass through unredacted.~~ **Resolved in v1.1** for structured FR/DE/IT/ES/PT addresses (covering the common prefix-keyword and compound-suffix forms) and bare UK/FR/DE/IT/ES/PT postcodes. | High | **Resolved** | v1.1 (this release) |
+| R1-residual | Address name tokens with apostrophes (e.g. `O'Brien Road`), German multi-word prefix forms (`Unter den Linden 5`, `Am Markt 3`), non-EU locales (NL, BE, SE, …), all-caps headers (`BAKER STREET`), and lowercase UK postcodes in free text are NOT covered. | Medium | Not mitigated | Future — narrow pattern extensions per compliance re-review |
+| R2 | EU-native mobile phone formats (FR `06 12 34 56 78` 2-2-2-2-2 grouping, DE `030 12345678` 3+8 variable, UK `07700 900123` 5+6, IT / ES / PT CC-prefixed groupings) systematically under-match the NANP-shape regex. | High | Not mitigated | v1.2 — `libphonenumber-js` integration |
 | R3 | Applicant's full name in CV header flows unredacted. Regex is an inappropriate tool (CVs are lists of proper nouns — company names, universities, referees). NER is the right tool. | Medium | Not mitigated | v1.2 — NER-based name redaction (Microsoft Presidio or equivalent) |
-| R5 | IDN email addresses with non-ASCII local or domain part (`françois@école.fr`, `user@münchen.de`) pass through unredacted. Punycode-encoded (`xn--…`) addresses DO match. | Low | Not mitigated | v1.1 — widen character classes / validated-email parser |
+| R5 | IDN email addresses with non-ASCII local or domain part (`françois@école.fr`, `user@münchen.de`) pass through unredacted. Punycode-encoded (`xn--…`) addresses DO match. | Low | Not mitigated | v1.2 — widen character classes / validated-email parser |
 | R10 | National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors. | Low | Not mitigated | v1.2 — national-ID pattern set |
 
-**Consuming apps SHOULD add caller-level scrubbing for non-English content until v1.1 lands.** For scoring, the existing `sanitizePii` on the chunker boundary (`cv-chunker.ts:186`, `cv-chunker.ts:203`) and post-LLM evidence-quote scrubbing (`llm-coverage.service.ts:178`) remain in place as defence-in-depth. Platform callers producing CV content from non-English sources should run `sanitizePii` once at the caller layer in addition to the middleware.
+**Consuming apps SHOULD still add caller-level scrubbing for R2 phone coverage** (native EU mobile formats) until `libphonenumber-js` integration lands in v1.2. Address coverage is now locale-aware; R1 no longer requires caller-side address scrubbing for FR/DE/IT/ES/PT structured forms. For scoring, the existing `sanitizePii` on the chunker boundary (`cv-chunker.ts:186`, `cv-chunker.ts:203`) and post-LLM evidence-quote scrubbing (`llm-coverage.service.ts:178`) remain in place as defence-in-depth.
+
+**Performance budget:** `sanitizePii` completes under 10ms on a ~10KB prompt containing mixed EU-style PII (verified by `src/__tests__/locale-patterns.test.ts` performance test — 10-run mean). Middleware overhead remains negligible at the single-call chokepoint even with 16 pattern passes per prompt.
 
 ## Security Posture (S11)
 
@@ -160,7 +181,20 @@ Pure, one-way redaction. Idempotent. Empty input returns empty string. Non-PII i
 
 ### `piiPatterns`
 
-Record of named **factory functions**: `email`, `address`, `phoneInternational`, `phoneDomestic`, `dob`. Calling a factory (`piiPatterns.email()`) returns a fresh `/g`-flagged `RegExp`. Individual factories also exported as `emailPattern`, `addressPattern`, `phoneInternationalPattern`, `phoneDomesticPattern`, `dobPattern`. See the "Why factories?" note above for the stateful-`lastIndex` rationale.
+Dictionary of named **factory functions** (v1.1 shape):
+
+- `piiPatterns.email` — email factory.
+- `piiPatterns.address` — English address factory (alias for `piiPatterns.addressByLocale.en`; retained for v1.0.0 consumer backward-compat).
+- `piiPatterns.addressByLocale.{en,fr,de,it,es,pt}` — per-locale address factories (new in v1.1).
+- `piiPatterns.postcodeByLocale.{uk,fr,de,it,es,pt}` — per-locale bare-postcode factories (new in v1.1).
+- `piiPatterns.phoneInternational`, `piiPatterns.phoneDomestic` — NANP-shape phone factories.
+- `piiPatterns.dob` — DOB factory.
+
+Calling any factory returns a fresh `/g`-flagged `RegExp` on every call (see the "Why factories?" note above for the stateful-`lastIndex` rationale).
+
+Individual factories are also exported by name: `emailPattern`, `addressPattern` (EN), `addressFrPattern`, `addressDePattern`, `addressItPattern`, `addressEsPattern`, `addressPtPattern`, `postcodeUkPattern`, `postcodeFrPattern`, `postcodeDePattern`, `postcodeItPattern`, `postcodeEsPattern`, `postcodePtPattern`, `phoneInternationalPattern`, `phoneDomesticPattern`, `dobPattern`.
+
+Type exports: `PiiPatternName` (top-level `piiPatterns` keys), `AddressLocale` (EN/FR/DE/IT/ES/PT), `PostcodeLocale` (UK/FR/DE/IT/ES/PT).
 
 ### `piiMiddleware: LanguageModelV1Middleware`
 

@@ -14,7 +14,7 @@ import { piiPatterns } from '../patterns.js';
  *
  *   - FR: `06 12 34 56 78` (2-2-2-2-2 grouping)
  *   - DE: `030 12345678` (3+8 variable)
- *   - UK: `07700 900123` (5+6)
+ *   - UK: `07911 123456` (5+6)
  *   - IT: `+39 320 1234567` (3+7 after CC)
  *   - ES: `+34 612 34 56 78` (3+2+2+2 after CC)
  *   - PT: `+351 912 345 678` (3+3+3 after CC)
@@ -37,11 +37,13 @@ import { piiPatterns } from '../patterns.js';
  *   - All existing phone fixtures (`555-123-4567`, `(555) 123-4567`,
  *     `+1 555 123 4567`, `+44 555 123 4567`) stay green.
  *
- * Test fixtures are synthetic (no real PII). Numbers are drawn from Ofcom
- * reserved ranges (UK `07700 900xxx`) or clearly non-assigned prefixes; EU
- * numbers use widely-published form examples that happen to pass
- * libphonenumber-js validation because they follow the national format
- * (they are NOT real subscriber lines).
+ * Test fixtures are synthetic (no real PII). UK numbers use the Ofcom
+ * `07911 xxxxxx` / `020 7946 xxxx` example ranges which pass
+ * libphonenumber-js validation + correspond to Ofcom's published "numbers
+ * for drama and textbooks"; EU numbers use format-plausible examples that
+ * pass national-format validation (they are NOT real subscriber lines).
+ * The `07700 900xxx` range (strictly reserved for drama) is NOT used
+ * because libphonenumber-js correctly rejects it as invalid.
  */
 
 // -----------------------------------------------------------------------
@@ -85,10 +87,10 @@ describe('piiPatterns.phoneByLocale — dictionary shape + validator contract', 
     expect(isValidDe('not-a-number')).toBe(false);
   });
 
-  it('UK validator accepts a valid UK mobile (Ofcom reserved range 07700 900xxx)', () => {
+  it('UK validator accepts a valid UK mobile (Ofcom drama/textbook range)', () => {
     const isValidUk = piiPatterns.phoneByLocale.uk();
-    expect(isValidUk('07700 900123')).toBe(true);
-    expect(isValidUk('+44 7700 900123')).toBe(true);
+    expect(isValidUk('07911 123456')).toBe(true);
+    expect(isValidUk('+44 7911 123456')).toBe(true);
     expect(isValidUk('not-a-number')).toBe(false);
   });
 
@@ -159,14 +161,14 @@ describe('sanitizePii — German phones (R2)', () => {
 });
 
 describe('sanitizePii — UK phones (R2)', () => {
-  it('redacts "07700 900123" (Ofcom reserved mobile range)', () => {
-    expect(sanitizePii('Mobile 07700 900123 weekdays')).toBe(
+  it('redacts "07911 123456" (UK mobile, Ofcom drama/textbook range)', () => {
+    expect(sanitizePii('Mobile 07911 123456 weekdays')).toBe(
       'Mobile [phone] weekdays',
     );
   });
 
-  it('redacts "+44 7700 900123" (international prefix)', () => {
-    expect(sanitizePii('Call +44 7700 900123 later')).toBe(
+  it('redacts "+44 7911 123456" (international prefix)', () => {
+    expect(sanitizePii('Call +44 7911 123456 later')).toBe(
       'Call [phone] later',
     );
   });
@@ -287,7 +289,7 @@ describe('sanitizePii — EU phone idempotency + order-of-application', () => {
   });
 
   it('is idempotent on UK phone (second pass is a no-op)', () => {
-    const once = sanitizePii('Call 07700 900123 please');
+    const once = sanitizePii('Call 07911 123456 please');
     expect(sanitizePii(once)).toBe(once);
   });
 
@@ -345,7 +347,7 @@ describe('sanitizePii — cross-locale integration with EU phones', () => {
 
   it('redacts full UK CV header with phone', () => {
     const input =
-      'John Smith, 10 Downing Street, SW1A 2AA, john@example.co.uk, Tel: 07700 900123.';
+      'John Smith, 10 Downing Street, SW1A 2AA, john@example.co.uk, Tel: 07911 123456.';
     const once = sanitizePii(input);
     expect(once).toContain('[email]');
     expect(once).toContain('[address]');

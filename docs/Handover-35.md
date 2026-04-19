@@ -217,6 +217,41 @@ User decision 2026-04-19: reduced hardening tier appropriate to the solo-private
 
 ---
 
+## Architecture pivot 2026-04-19 — git-install pattern adopted
+
+**Context:** User decision 2026-04-19 after 3 consecutive npm-publish workflow failures (GPG-gate, --provenance-incompatibility, coverage-threshold incidentals). For solo-private-internal use with only `jobflow-scoring` + `jobflow-platform` as consumers, the npm registry publish path was overkill.
+
+**New architecture:** consumers install directly from git via `github:kgn-git/jobflow-privacyutils#v1.0.0`. A `prepare` lifecycle script in `package.json` builds `dist/` on install. No npm registry; no `.npmrc` auth ceremony; no publish workflow.
+
+**Changes applied:**
+
+- `package.json` — added `"prepare": "npm run build"`; removed `publishConfig` block.
+- `.github/workflows/publish.yml` — deleted.
+- `README.md` — installation section rewritten for git-install pattern; S4 + S10 re-scoped to n/a under new architecture; S5/S6/S7/S11 unchanged; S1/S2/S3/S8 deferred (unchanged per reduced-tier decision).
+- This handover — this section documents the pivot.
+
+**S-item disposition under git-install architecture:**
+
+| S-item | v1.0.0 disposition |
+|---|---|
+| S1 `main` branch protection | Deferred (per reduced tier; ruleset JSON preserved) |
+| S2 Tag ruleset | Deferred (per reduced tier; ruleset JSON preserved) |
+| S3 GPG-signed tags | Deferred (per reduced tier; runbook preserved) |
+| S4 npm provenance | **n/a under git-install** (no npm publish) |
+| S5 recheck ReDoS CI lint | **Kept** (automated in `ci.yml`) |
+| S6 dependency-review-action | **Kept** (automated in `ci.yml`) |
+| S7 Dependabot | **Kept** (automated via `.github/dependabot.yml`) |
+| S8 Socket.dev GitHub App | Deferred (per reduced tier) |
+| S9 Org 2FA | Verified nominal (per reduced tier) |
+| S10 Consumer `.npmrc` scope pin | **n/a under git-install** (no npm registry) — replaced by consumer exact-tag pin in `package.json` |
+| S11 README Security Posture section | **Kept** + updated to reflect git-install architecture |
+
+**Upgrade path:** if the package later needs to go on a registry (e.g. for external distribution), revive `publish.yml` from git history at commit `877b478` and restore `publishConfig` in `package.json`. The `prepare` script stays compatible either way.
+
+**C4 closure gate (unchanged):** programme#35 still closes only after `jobflow-platform#476` consumes v1.0.0 and the consumption PR merges to platform `main`. Under git-install, "consume" means "add the git-ref dependency line to `package.json`".
+
+---
+
 ## User-manual steps gating v1.0.0 tag push (SUPERSEDED 2026-04-19 — retained for historical reference)
 
 The following MUST complete before the tag `v1.0.0` can be safely pushed. Ordered by criticality:

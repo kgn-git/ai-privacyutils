@@ -4,25 +4,38 @@ Canonical PII-redaction library for the Jobflow programme. Provides pure `saniti
 
 v1.0.0 ships the first-ever PII redaction on the Jobflow platform's LLM path, closing a pre-existing GDPR Art. 5(1)(c) / 25 / 32 compliance gap. It is consumed by [`jobflow-scoring`](https://github.com/kgn-git/jobflow-scoring) (scoring#82) and [`jobflow-platform`](https://github.com/kgn-git/jobflow-platform) (platform#476).
 
-## Install
+## Installation
 
-Published to GitHub Packages (private registry). Consumers must have a repo-root `.npmrc` pointing the `@kgn-git` scope at GitHub Packages and an auth token available in the `GITHUB_TOKEN` environment variable with `read:packages` scope.
+`@kgn-git/privacy-utils` ships as a private git-installable package for consumption inside the Jobflow programme. There is **no npm registry publish step** — consumers install directly from the git tag.
 
-Sample `.npmrc`:
+### Consumer setup
 
-```
-@kgn-git:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-always-auth=true
-```
+In the consumer repo's `package.json`, add a dependency pinned to an exact git tag:
 
-Then:
-
-```bash
-npm install @kgn-git/privacy-utils@1.0.0
+```json
+{
+  "dependencies": {
+    "@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v1.0.0"
+  }
+}
 ```
 
-**Pin the exact version** — do NOT use a caret range. A compromised minor/patch release would otherwise enter production without a PR review (S10 per security review).
+When `npm install` runs, npm clones the tag at the named ref, runs the package's `prepare` script to build `dist/`, and the resulting artefacts are available at `@kgn-git/privacy-utils` in `node_modules/`. Consumers need **read access to `kgn-git/jobflow-privacyutils`** (automatic for org members; CI runners need a token).
+
+For CI runners, provide a Personal Access Token or a GitHub App token with `Repository permissions: Contents: Read` on `kgn-git/jobflow-privacyutils`, exported as `GITHUB_TOKEN` (or whatever variable your package manager uses for private git access).
+
+### Version pinning
+
+- Pin to an **exact** tag (`v1.0.0`, `v1.1.0`, etc.) — never use a branch name or `main`.
+- Upgrading is an explicit PR that bumps the `#vX.Y.Z` ref.
+- Semver implications:
+  - **Major bump** (`v2.0.0`) — breaking API change; migration required.
+  - **Minor bump** (`v1.1.0`) — additive new patterns / locale coverage.
+  - **Patch bump** (`v1.0.1`) — pattern tuning; no semantic change.
+
+### Why git-install rather than npm registry?
+
+Single-org internal consumption; two consumer repos (`jobflow-scoring`, `jobflow-platform`). npm registry publish would require tokens + `.npmrc` config per consumer + registry attack surface. The git-install path avoids all of this with equivalent version-pinning ergonomics. See `docs/Handover-35.md` § Architecture pivot 2026-04-19 for full rationale.
 
 ## Usage
 
@@ -112,13 +125,13 @@ This package is a canonical compliance control on the LLM prompt edge. A silent 
 - **S1 — `main` branch protection.** Required reviews ≥ 1; dismiss stale approvals on new commits; required status checks (lint, typecheck, test, redos-scan, audit, dependency-review); signed commits required; linear history; block force push. CODEOWNERS gates `.github/`, `package.json`, `package-lock.json`, `src/patterns.ts`, `src/pii-middleware.ts`.
 - **S2 — tag ruleset.** `v*.*.*` tag pattern: restrict deletions, restrict updates (immutable), maintainers only.
 - **S3 — GPG-signed tags.** v1.0.0 and every release tag is an annotated `git tag -s` signed with a dedicated Ed25519 hardware-token key (YubiKey 5 series) registered under the release-maintainer GitHub account. Key fingerprint published in `docs/SIGNING-TAGS.md`.
-- **S4 — npm publish with provenance.** `.github/workflows/publish.yml` uses `npm publish --provenance --access restricted` with `id-token: write` permission and `actions/attest-build-provenance@v2.3.0`; all action SHAs pinned (not floating tags). Attestation published to Sigstore Rekor transparency log — consumers can verify via `npm audit signatures`. Subject-path is `dist/**` so the attestation covers `.d.ts`, `.d.ts.map`, and `.js.map` alongside runtime `.js`.
+- **S4 — npm publish with provenance.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry publish step; consumers install directly from the git tag and build `dist/` via the `prepare` lifecycle script. Build integrity is the consumer's own CI concern (building from a pinned git tag is deterministic). If the package is later promoted to a registry for external distribution, the `publish.yml` workflow can be revived from git history at commit `877b478`.
 - **S5 — ReDoS scanner in CI.** `recheck` v4.x (NOT the unmaintained `safe-regex`) runs programmatically over `src/patterns.ts` via `scripts/redos-scan.mjs` as a required CI check. `eslint-plugin-redos@^4` also runs via `npm run lint`.
 - **S6 — dependency-review-action@v4.** Required CI check on every PR; fails on high/critical CVE or GPL-family licence.
 - **S7 — Dependabot.** Weekly npm + github-actions updates; no auto-merge (every bump goes through branch-protected PR).
 - **S8 — Socket.dev GitHub App.** Behavioural analysis of every new dep (install scripts, network access, filesystem writes, typosquat).
 - **S9 — Org 2FA enforcement.** `kgn-git` organisation enforces 2FA on all members.
-- **S10 — Consumer-side typosquat defence.** `jobflow-scoring` and `jobflow-platform` commit a repo-root `.npmrc` scoping `@kgn-git/*` to `npm.pkg.github.com` only. Exact-version pinning (not caret) in consumer `package.json`.
+- **S10 — Consumer-side typosquat defence.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry lookup, so typosquat on `npm.pkg.github.com` is not a threat surface. Replaced by consumer **exact-tag git-ref pinning** in `package.json` (e.g. `"@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v1.0.0"`) — npm resolves the named tag from the pinned GitHub repo directly; no registry intermediary; upgrades are explicit PR-gated ref bumps.
 
 Full security review: `jobflow-programme/docs/security-reviews/SecurityReview-2026-04-19-privacy-utils-v1.0.0-hardening.md`.
 

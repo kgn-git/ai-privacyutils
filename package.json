@@ -36,15 +36,12 @@
     "url": "https://github.com/kgn-git/jobflow-privacyutils/issues"
   },
   "homepage": "https://github.com/kgn-git/jobflow-privacyutils#readme",
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
-  },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
     "lint": "eslint src",
     "test": "vitest run",
     "test:watch": "vitest",

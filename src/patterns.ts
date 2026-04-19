@@ -60,26 +60,78 @@
  *     pass. NANP-shape `phoneInternational` / `phoneDomestic` fallbacks
  *     retained for backward-compat with v1.0.0 consumers.
  *   - R3 Applicant names — v1.2 NER work.
- *   - R5 IDN email — v1.2.
+ *   - R5 RESOLVED — `emailPattern` is now RFC 6531 / IDNA 2008 aware via
+ *     `\p{L}\p{N}` Unicode classes + `u` flag. Matches IDN local parts
+ *     (françois@), IDN domains (école.fr, münchen.de), punycode ACE
+ *     (xn--mnchen-3ya.de), and Unicode TLDs (example.中国). ASCII fixtures
+ *     remain byte-equivalent.
  *   - R10 National identifiers — v1.2.
  */
 
 /**
- * Email addresses: local@domain.tld.
+ * Email addresses: local@domain.tld with IDN + RFC 6531 support (v1.1 — R5).
  *
- * Character class `[a-zA-Z0-9.-]` in the domain rejects IDN punycode-decoded
- * hosts; RFC 6531 / SMTPUTF8 local parts also fail. Known gap R5.
+ * v1.0.0 was ASCII-only (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+ * and rejected:
+ *   - IDN domains per RFC 5892 / IDNA 2008 — e.g. `école.fr`, `münchen.de`,
+ *     `università.it`.
+ *   - SMTPUTF8 Unicode local parts per RFC 6531 — e.g. `françois@...`,
+ *     `müller@...`, `joão@...`, `maría@...`.
+ *   - Unicode TLDs — e.g. `example.中国`, `example.рф`.
  *
- * ReDoS hardening note (S5): the canonical scoring source `cv-chunker.ts:76`
- * uses unbounded `+` quantifiers with overlapping `.` on either side of `@`,
- * which `recheck` v4 flags as a 2nd-degree polynomial. v1.0.0 caps both
- * quantifiers (local part ≤ 64 per RFC 5321 §4.5.3.1.1, domain part ≤ 253
- * per RFC 5321 §4.5.3.1.2) to eliminate the unbounded backtracking. The
- * bounds are generous enough that every realistic email in the canonical
- * fixtures still matches byte-equivalent to the unbounded version.
+ * v1.1 widens the character classes to Unicode using `\p{L}` (any letter)
+ * and `\p{N}` (any number) with the `u` flag. ASCII shapes remain
+ * byte-equivalent because `\p{L}` is a strict superset of `a-zA-Z` and
+ * `\p{N}` is a strict superset of `0-9`. Punycode (`xn--mnchen-3ya.de`)
+ * matches transparently since the punycode ACE form is pure ASCII
+ * letters + digits + hyphens — no decoding needed.
+ *
+ * Structural pieces (all bounded to remain ReDoS-safe per S5):
+ *   - Local part: `[\p{L}\p{N}._%+-]{1,64}` — per RFC 5321 §4.5.3.1.1.
+ *   - Domain labels: `(?:[\p{L}\p{N}-]{1,63}\.){1,5}` — per RFC 5321
+ *     §4.5.3.1.2 with up to 5 subdomain labels (generous for CV text).
+ *   - TLD: `[\p{L}]{2,24}` — allows both ASCII TLDs (`com`, `co.uk`) and
+ *     Unicode TLDs (`中国`). Digits are deliberately excluded from the TLD
+ *     to reject `foo.1` style false-positives.
+ *
+ * ## Boundary handling
+ *
+ * The legacy pattern used `\b` for the trailing boundary. `\b` is
+ * ASCII-aware only — for Unicode TLDs it would match at every
+ * letter-to-non-letter boundary including inside the Unicode TLD
+ * character sequence, producing mis-matches. v1.1 replaces the trailing
+ * `\b` with a negative lookahead `(?![\p{L}\p{N}-])` that rejects only
+ * when another email-domain character follows (preserving the "end of
+ * token" semantics across both ASCII and Unicode).
+ *
+ * The leading `(?<![a-zA-Z0-9._%+-])` lookbehind is similarly widened to
+ * `(?<![\p{L}\p{N}._%+-])` so an IDN character immediately before the
+ * local part does not bleed into a false match start.
+ *
+ * ## ReDoS safety (S5)
+ *
+ * All quantifiers remain bounded. No nested unbounded + or * on
+ * overlapping character classes. Unicode property escapes (`\p{L}`,
+ * `\p{N}`) are pure character classes from `recheck`'s perspective — they
+ * do not change the polynomial class of the pattern. Verified by
+ * `npm run redos:scan` (scripts/redos-scan.mjs).
+ *
+ * ## Idempotency
+ *
+ * The `[email]` replacement token contains no `@` so it cannot match
+ * itself. Lookbehind/lookahead boundaries remain stable on `[` / `]`
+ * characters (neither is in the email character classes). Second-pass
+ * `sanitizePii` is a provable no-op.
+ *
+ * ## Backward compat
+ *
+ * All v1.0.0 ASCII fixtures (jane.doe@example.com, foo.bar+cv2026@mail.example.co.uk,
+ * alice@uni.edu, bob.smith@acme.io, twitter-style @handle non-match) redact
+ * byte-equivalent under the new pattern. Regression guard test cases live
+ * in `src/__tests__/idn-email.test.ts`.
  */
 export function emailPattern(): RegExp {
-  return /(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]{1,64}@(?:[a-zA-Z0-9-]{1,63}\.){1,5}[a-zA-Z]{2,24}\b/g;
+  return /(?<![\p{L}\p{N}._%+-])[\p{L}\p{N}._%+-]{1,64}@(?:[\p{L}\p{N}-]{1,63}\.){1,5}[\p{L}]{2,24}(?![\p{L}\p{N}-])/gu;
 }
 
 /**

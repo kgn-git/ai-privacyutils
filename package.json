@@ -64,7 +64,7 @@
     "eslint": "^9.0.0",
     "eslint-plugin-redos": "^4.5.0",
     "recheck": "^4.5.0",
-    "typescript": "^5.5.0",
+    "typescript": "^6.0.3",
     "vitest": "^2.0.0"
   }
 }

@@ -42,18 +42,24 @@ export function sanitizePii(text: string): string {
 
   let out = text;
 
+  // Each pattern is a factory (IMP-1): call with `()` to get a fresh /g
+  // RegExp so concurrent consumers never share lastIndex state. Inside
+  // `String.prototype.replace` the freshness matters less (replace resets
+  // lastIndex internally) but calling factories keeps the internal idiom
+  // aligned with the exported API.
+
   // 1. Email first — '@' runs are unambiguous.
-  out = out.replace(emailPattern, '[email]');
+  out = out.replace(emailPattern(), '[email]');
 
   // 2. Address — captures the leading house-number digit run.
-  out = out.replace(addressPattern, '[address]');
+  out = out.replace(addressPattern(), '[address]');
 
   // 3-4. Phone — international first (consumes +CC prefix), then domestic.
-  out = out.replace(phoneInternationalPattern, '[phone]');
-  out = out.replace(phoneDomesticPattern, '[phone]');
+  out = out.replace(phoneInternationalPattern(), '[phone]');
+  out = out.replace(phoneDomesticPattern(), '[phone]');
 
   // 5. DOB last — see header comment.
-  out = out.replace(dobPattern, '[dob]');
+  out = out.replace(dobPattern(), '[dob]');
 
   return out;
 }

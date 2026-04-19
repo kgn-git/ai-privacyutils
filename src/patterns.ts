@@ -14,6 +14,23 @@
  * international phone → domestic phone → DOB. Documented in
  * `src/__tests__/sanitize-pii.test.ts` with inline justification.
  *
+ * ## Why factories (IMP-1, 2026-04-19)
+ *
+ * Each pattern is exported as a **factory function** that returns a fresh
+ * `RegExp` on every call, rather than as a module-level singleton. The
+ * hazard being avoided is the `/g`-flagged stateful-`lastIndex` footgun:
+ *
+ *   const re = SHARED_EMAIL_REGEX;             // /g-flagged
+ *   re.test('jane@example.com');                // true, advances lastIndex
+ *   re.test('jane@example.com');                // false — lastIndex past end
+ *   re.test('jane@example.com');                // true again — lastIndex reset
+ *
+ * `String.prototype.replace` (used internally by `sanitizePii`) resets
+ * `lastIndex` automatically, so the singleton shape was safe for the
+ * package's own consumers. But any external consumer calling `.test()` or
+ * `.exec()` against an imported pattern would trip the alternation. Factories
+ * guarantee every call-site gets a pristine instance.
+ *
  * Known limitations (R1-R5, R10 in compliance review §7):
  *   - Non-English postal addresses pass through unredacted (FR/DE/IT/ES/PT).
  *   - EU-native mobile phone formats systematically under-match.
@@ -38,8 +55,9 @@
  * bounds are generous enough that every realistic email in the canonical
  * fixtures still matches byte-equivalent to the unbounded version.
  */
-export const emailPattern =
-  /(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]{1,64}@(?:[a-zA-Z0-9-]{1,63}\.){1,5}[a-zA-Z]{2,24}\b/g;
+export function emailPattern(): RegExp {
+  return /(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]{1,64}@(?:[a-zA-Z0-9-]{1,63}\.){1,5}[a-zA-Z]{2,24}\b/g;
+}
 
 /**
  * US / UK-style street address: number-first, optional multi-word name,
@@ -52,27 +70,42 @@ export const emailPattern =
  * which `recheck` v4 flags as a 2nd-degree polynomial ReDoS (adjacent
  * quantifiers on overlapping character classes). v1.0.0 rewrites the
  * street-name portion using a single bounded quantifier over
- * `[A-Z][a-zA-Z]*` units separated by single `\s` — behaviourally
- * equivalent on all canonical fixtures (`42 Baker Street`,
- * `1600 Pennsylvania Avenue`, `10 Apollo Court NW`,
- * `221 Baker St`, `10 Downing Street`) but linear-time on adversarial
- * input. Tested under `npm run redos:scan` in CI.
+ * `[A-Z][a-zA-Z]{0,15}` units separated by single space — behaviourally
+ * safer than the original on all canonical fixtures and linear-time on
+ * adversarial input.
+ *
+ * CRIT-2 fix (2026-04-19): the initial v1.0.0 draft used `[a-z]{1,15}` for
+ * the inner class, which rejected mixed-case tokens like `McLane` and
+ * all-caps 2-char tokens like `LA` in `LA Cienega Boulevard`. Widened to
+ * `[a-zA-Z]{0,15}`: the leading `[A-Z]` forces an initial capital, the
+ * `{0,15}` tail allows zero-length (for `LA`-style 2-char tokens) or
+ * mixed-case continuation (for `McLane`). Bounded quantifier preserves
+ * ReDoS safety — still linear-time per `recheck`.
+ *
+ * Fixtures covered: `42 Baker Street`, `1600 Pennsylvania Avenue`,
+ * `10 Apollo Court NW`, `221 Baker St`, `10 Downing Street`,
+ * `42 McLane Drive`, `10 LA Cienega Boulevard`. Apostrophes (O'Brien) and
+ * non-English postal formats remain future work (R1).
  */
-export const addressPattern =
-  /\b\d{1,6}(?: [A-Z][a-z]{1,15}){1,5} (?:Avenue|Ave|Street|St|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl|Terrace|Ter|Highway|Hwy|Parkway|Pkwy)(?: (?:NW|NE|SW|SE|N|S|E|W))?\b/g;
+export function addressPattern(): RegExp {
+  return /\b\d{1,6}(?: [A-Z][a-zA-Z]{0,15}){1,5} (?:Avenue|Ave|Street|St|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl|Terrace|Ter|Highway|Hwy|Parkway|Pkwy)(?: (?:NW|NE|SW|SE|N|S|E|W))?\b/g;
+}
 
 /**
  * International phone: `+?CC-area-3-3-4` NANP-shape.
  *
  * NANP-shaped; native EU mobile formats under-match. Known gap R2.
  */
-export const phoneInternationalPattern =
-  /\+?\d{1,3}[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+export function phoneInternationalPattern(): RegExp {
+  return /\+?\d{1,3}[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+}
 
 /**
  * Domestic phone (NANP-shape fallback).
  */
-export const phoneDomesticPattern = /\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+export function phoneDomesticPattern(): RegExp {
+  return /\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+}
 
 /**
  * Date of birth (C1 mandatory, new in v1.0.0).
@@ -100,38 +133,44 @@ export const phoneDomesticPattern = /\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
  * Does NOT match bare years (`1985`) or month-year only (`March 1985`) —
  * those are non-DOB contexts (employment dates, etc.).
  */
-export const dobPattern = new RegExp(
-  [
-    // Numeric: DD.MM.YYYY | DD/MM/YYYY | DD-MM-YYYY
-    '\\b\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4}\\b',
-    // Numeric: YYYY-MM-DD (ISO)
-    '\\b\\d{4}-\\d{1,2}-\\d{1,2}\\b',
-    // Named month, day-first: "12 March 1985" (+ EU locales)
-    // Day, optional period, whitespace, month name (EN/FR/DE/IT/ES/PT),
-    // whitespace, optional "de " for ES/PT, year.
-    '\\b\\d{1,2}\\.?\\s+(?:' +
-      // EN
-      'January|February|March|April|May|June|July|August|September|October|November|December|' +
-      // FR
-      'janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre|' +
-      // DE
-      'Januar|Februar|M[aä]rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember|' +
-      // IT
-      'gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|' +
-      // ES / PT share many month names — grouped
-      'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|' +
-      'janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro' +
-      ')(?:\\s+de)?\\s+\\d{4}\\b',
-    // Named month, US-style month-first: "March 12, 1985"
-    '\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b',
-    // Day + German named month preceded by "de" prefix (ES/PT pattern with ES day prefix)
-    '\\b\\d{1,2}\\s+de\\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|janeiro|fevereiro|mar[çc]o|maio|junho|julho|setembro|outubro|novembro|dezembro)\\s+de\\s+\\d{4}\\b',
-  ].join('|'),
-  'g',
-);
+export function dobPattern(): RegExp {
+  return new RegExp(
+    [
+      // Numeric: DD.MM.YYYY | DD/MM/YYYY | DD-MM-YYYY
+      '\\b\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4}\\b',
+      // Numeric: YYYY-MM-DD (ISO)
+      '\\b\\d{4}-\\d{1,2}-\\d{1,2}\\b',
+      // Named month, day-first: "12 March 1985" (+ EU locales)
+      // Day, optional period, whitespace, month name (EN/FR/DE/IT/ES/PT),
+      // whitespace, optional "de " for ES/PT, year.
+      '\\b\\d{1,2}\\.?\\s+(?:' +
+        // EN
+        'January|February|March|April|May|June|July|August|September|October|November|December|' +
+        // FR
+        'janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre|' +
+        // DE
+        'Januar|Februar|M[aä]rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember|' +
+        // IT
+        'gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|' +
+        // ES / PT share many month names — grouped
+        'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|' +
+        'janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro' +
+        ')(?:\\s+de)?\\s+\\d{4}\\b',
+      // Named month, US-style month-first: "March 12, 1985"
+      '\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b',
+      // Day + German named month preceded by "de" prefix (ES/PT pattern with ES day prefix)
+      '\\b\\d{1,2}\\s+de\\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|janeiro|fevereiro|mar[çc]o|maio|junho|julho|setembro|outubro|novembro|dezembro)\\s+de\\s+\\d{4}\\b',
+    ].join('|'),
+    'g',
+  );
+}
 
 /**
  * Named export of all v1.0.0 patterns for programmatic composition.
+ *
+ * Each value is a factory function — call with `()` to get a fresh `/g`
+ * RegExp instance. See the file-level "Why factories" note for the
+ * stateful-lastIndex rationale.
  */
 export const piiPatterns = {
   email: emailPattern,

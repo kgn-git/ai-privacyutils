@@ -18,12 +18,14 @@ import {
   dobPattern,
 } from '../dist/patterns.js';
 
+// Pattern exports are factory functions (IMP-1); call each to obtain the
+// underlying /g RegExp that recheck will analyse.
 const targets = [
-  ['emailPattern', emailPattern],
-  ['addressPattern', addressPattern],
-  ['phoneInternationalPattern', phoneInternationalPattern],
-  ['phoneDomesticPattern', phoneDomesticPattern],
-  ['dobPattern', dobPattern],
+  ['emailPattern', emailPattern()],
+  ['addressPattern', addressPattern()],
+  ['phoneInternationalPattern', phoneInternationalPattern()],
+  ['phoneDomesticPattern', phoneDomesticPattern()],
+  ['dobPattern', dobPattern()],
 ];
 
 let failed = 0;

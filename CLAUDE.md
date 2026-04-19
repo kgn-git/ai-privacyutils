@@ -9,7 +9,7 @@ Project guidance for Claude Code on `@kgn-git/privacy-utils`.
 `@kgn-git/privacy-utils` is the canonical PII-redaction library for the Jobflow programme. It exposes:
 
 - `sanitizePii(text)` — pure one-way redaction for email / address / phone / DOB in arbitrary text.
-- `piiPatterns` — named `RegExp` values for programmatic composition.
+- `piiPatterns` — object of factory functions (each call returns a fresh `RegExp` with `/g`); factories prevent stateful-`lastIndex` bugs on programmatic `.test()` / `.exec()` reuse. Invoke as `piiPatterns.email()`.
 - `piiMiddleware` — Vercel AI SDK middleware (`LanguageModelV1Middleware`) that hooks `transformParams` to scrub prompts before SDK emission.
 
 Consumers: `jobflow-scoring` (scoring#82) and `jobflow-platform` (platform#476). The package closes a pre-existing GDPR Art. 5(1)(c) / 25 / 32 compliance gap on platform's LLM path.

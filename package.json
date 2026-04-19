@@ -49,7 +49,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "redos:scan": "recheck src/patterns.ts --timeout 30000",
+    "redos:scan": "npm run build && node scripts/redos-scan.mjs",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {

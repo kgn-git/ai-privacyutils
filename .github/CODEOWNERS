@@ -1,0 +1,24 @@
+# Code owners (S1 per security review).
+#
+# Compliance-critical source + CI + release workflow files require
+# review from the privacy-utils-maintainers team. Combined with
+# `Require review from Code Owners` in the main branch ruleset, this
+# ensures every change to the regex patterns, the middleware, CI, or
+# release plumbing goes through a maintainer-gated PR.
+#
+# The privacy-utils-maintainers team is defined in the kgn-git org.
+
+# Privacy-critical source
+/src/patterns.ts         @kgn-git/privacy-utils-maintainers
+/src/pii-middleware.ts   @kgn-git/privacy-utils-maintainers
+/src/sanitize-pii.ts     @kgn-git/privacy-utils-maintainers
+
+# CI + release workflows
+/.github/                @kgn-git/privacy-utils-maintainers
+
+# Dependency manifest + lockfile
+/package.json            @kgn-git/privacy-utils-maintainers
+/package-lock.json       @kgn-git/privacy-utils-maintainers
+
+# Everything else inherits default branch protection (1 review)
+*                        @kgn-git/privacy-utils-maintainers

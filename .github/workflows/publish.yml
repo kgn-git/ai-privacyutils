@@ -83,11 +83,15 @@ jobs:
         run: npm test
       - name: ReDoS scan (last pre-publish gate)
         run: npm run redos:scan
-      - name: Publish to GitHub Packages with provenance
-        run: npm publish --provenance --access restricted
+      - name: Publish to GitHub Packages (private, restricted access)
+        # npm's own `--provenance` flag requires public packages. We keep the
+        # package private and produce the Sigstore attestation via the
+        # `actions/attest-build-provenance@v2.3.0` step below instead. Consumers
+        # verify via `gh attestation verify` (not `npm audit signatures`).
+        run: npm publish --access restricted
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Attest build provenance for dist artefacts
+      - name: Attest build provenance for dist artefacts (S4)
         uses: actions/attest-build-provenance@db473fddc028af60658334401dc6fa3ffd8669fd # v2.3.0
         with:
           # IMP-6: attest .d.ts, .d.ts.map, and .js.map alongside .js so a

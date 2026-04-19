@@ -139,13 +139,22 @@ Key correctness claims to verify:
 
 ## Code Review
 
-<Left blank by /developer per SD-002 amendment 2026-04-15. The dispatcher (`/programme-manager` at top-level session) populates this section after running `Agent(subagent_type="feature-dev:code-reviewer")` against this branch.>
-
-- Verdict: pending dispatcher review
-- Critical findings: pending
-- Important findings: pending
-- Minor findings: pending
-- Fix commit(s): pending
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session)
+- **Base SHA:** `18c88aef2dd59cf6ee92f9cf9c40a1faff2891b8`
+- **Head SHA (pre-fix):** `b207ab114d575a18d05280b710db863bca2f7d0a`
+- **Verdict:** Ready to merge
+- **Critical findings:** 0
+- **Important findings:** 0
+- **Minor findings:** 1 (MIN-1 below — fixed inline before merge)
+- **MIN-1 — Stale R5 row in README `Known Limitations` table** (confidence 90). The R8 row in the table at `README.md:168-177` was correctly updated to "Resolved" in this PR, but the R5 row was left unchanged from pre-v1.1 state despite `src/patterns.ts` documenting R5 as resolved by #3 (IDN email via `\p{L}\p{N}` + `u` flag + negative-lookahead Unicode boundary, merged at `18c88ae`). The existing `idn-email.test.ts` (23 tests) already verifies the resolution. Consumer-facing doc inconsistency: table claimed IDN email was "Not mitigated" when it is in fact resolved.
+  - **Fix:** inline README edit on top of `b207ab1`. R5 row strike-through + "Resolved in v1.1" narrative + ref to `src/__tests__/idn-email.test.ts` + greedy `{2,24}` TLD consumption trade-off note. Same treatment as R1/R2/R8 rows in the same table.
+- **Backward-compat byte-equivalence (load-bearing claim):** PASS per reviewer. No baseline test file modified; `piiMiddleware` const export shape preserved; `sanitizePii(text)` with no options threads through `tokensFor(undefined)` → `TOKEN_FORMATS['readable']` (v1.0.0 byte-identical).
+- **Sentinel idempotency:** PASS — reviewer verified by mental trace against every pattern in `src/patterns.ts`: no sentinel contains `@`, no sentinel contains digits, no sentinel matches FR lowercase street keyword, no sentinel matches DE compound suffix, no sentinel contains a closed-set prefix keyword for IT/ES/PT addresses.
+- **Option threading:** PASS — `createPiiMiddleware` closure → `transformParams` → `redactPrompt` → `redactMessage` → `redactPart` → `sanitizePii(text, { tokenFormat })` on every content shape (string prompt, string content, array content, text parts, reasoning parts).
+- **`TOKEN_FORMATS` immutability:** PASS — `Readonly<Record<TokenFormat, Readonly<Record<TokenKind, string>>>>` + `as const` on the constant.
+- **Sanitizer pipeline order:** PASS — email → addresses → postcodes → DOB → phones → NANP intl → NANP domestic. DOB-before-phones ordering from #2 preserved.
+- **ReDoS:** PASS — no new regex patterns introduced.
+- **Non-mutation invariant:** PASS — `deepClone(params)` at `pii-middleware.ts:134` guarantees caller's input is never mutated.
 
 ## Process rule compliance
 

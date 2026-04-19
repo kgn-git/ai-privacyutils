@@ -10,9 +10,22 @@
  * — covers `DD.MM.YYYY`, `DD/MM/YYYY`, `YYYY-MM-DD`, `DD-MM-YYYY`, and
  * named-month variants across EN/FR/DE/IT/ES/PT.
  *
- * Order of application (see `sanitizePii`): email → address →
- * international phone → domestic phone → DOB. Documented in
- * `src/__tests__/sanitize-pii.test.ts` with inline justification.
+ * v1.1 adds locale-aware address + postcode patterns per #1 (R1 of the
+ * compliance review §7). New exports:
+ *
+ *   - `addressByLocale.en()/.fr()/.de()/.it()/.es()/.pt()` — per-locale
+ *     structured-address factories. EN is the v1.0.0 pattern preserved
+ *     byte-equivalent; `piiPatterns.address` is kept as an alias for
+ *     `addressByLocale.en` for backward-compat.
+ *   - `postcodeByLocale.uk()/.fr()/.de()/.it()/.es()/.pt()` — bare
+ *     postcode factories. UK alphanumeric, FR/DE/IT/ES 5-digit with
+ *     following city token, PT NNNN-NNN with optional city.
+ *   - Replacement token for postcodes: `[postcode]` (new, additive).
+ *
+ * Order of application (see `sanitizePii`): email → addresses (all
+ * locales) → postcodes (all locales) → international phone → domestic
+ * phone → DOB. Documented in `src/__tests__/sanitize-pii.test.ts` and
+ * `src/__tests__/locale-patterns.test.ts` with inline justification.
  *
  * ## Why factories (IMP-1, 2026-04-19)
  *
@@ -31,14 +44,15 @@
  * `.exec()` against an imported pattern would trip the alternation. Factories
  * guarantee every call-site gets a pristine instance.
  *
- * Known limitations (R1-R5, R10 in compliance review §7):
- *   - Non-English postal addresses pass through unredacted (FR/DE/IT/ES/PT).
- *   - EU-native mobile phone formats systematically under-match.
- *   - Applicant names flow unredacted (regex-inappropriate; v1.2 NER target).
- *   - IDN email addresses (non-ASCII local/domain) pass through.
- *   - National identifiers (NIR/NINO/Codice Fiscale/DNI/NIF) not covered.
- * Consuming apps SHOULD add caller-level scrubbing for non-English content
- * until v1.1 ships locale-aware patterns. See README § Known Limitations.
+ * Known limitations (v1.1 — shrunk from v1.0.0 R1/R2/R3/R5/R10):
+ *   - R1 RESOLVED for FR/DE/IT/ES/PT structured addresses + UK/FR/DE/IT/ES/PT
+ *     bare postcodes. Residual gaps: names with apostrophes (`O'Brien Road`),
+ *     non-EU locales, and structured-address forms with unusual word order.
+ *   - R2 EU-native mobile phone formats still under-match — planned for v1.2
+ *     via `libphonenumber-js`.
+ *   - R3 Applicant names — v1.2 NER work.
+ *   - R5 IDN email — v1.2.
+ *   - R10 National identifiers — v1.2.
  */
 
 /**
@@ -63,32 +77,202 @@ export function emailPattern(): RegExp {
  * US / UK-style street address: number-first, optional multi-word name,
  * closed set of street-type terminators, optional direction suffix.
  *
- * Monolingual (English). Known gap R1.
+ * This is the English-locale pattern preserved byte-equivalent from v1.0.0.
+ * v1.1 aliases it as `addressByLocale.en`. It remains the canonical EN
+ * match — all v1.0.0 fixtures (Baker Street, Pennsylvania Avenue, 10
+ * Apollo Court NW, 10 Downing Street, 42 McLane Drive, 10 LA Cienega
+ * Boulevard) stay green.
  *
- * ReDoS hardening note (S5 per security review): the canonical scoring
- * source `cv-chunker.ts:80-83` uses `[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,4}`
- * which `recheck` v4 flags as a 2nd-degree polynomial ReDoS (adjacent
- * quantifiers on overlapping character classes). v1.0.0 rewrites the
- * street-name portion using a single bounded quantifier over
- * `[A-Z][a-zA-Z]{0,15}` units separated by single space — behaviourally
- * safer than the original on all canonical fixtures and linear-time on
+ * ReDoS hardening: single bounded quantifier over
+ * `[A-Z][a-zA-Z]{0,15}` units separated by single space — linear-time on
  * adversarial input.
- *
- * CRIT-2 fix (2026-04-19): the initial v1.0.0 draft used `[a-z]{1,15}` for
- * the inner class, which rejected mixed-case tokens like `McLane` and
- * all-caps 2-char tokens like `LA` in `LA Cienega Boulevard`. Widened to
- * `[a-zA-Z]{0,15}`: the leading `[A-Z]` forces an initial capital, the
- * `{0,15}` tail allows zero-length (for `LA`-style 2-char tokens) or
- * mixed-case continuation (for `McLane`). Bounded quantifier preserves
- * ReDoS safety — still linear-time per `recheck`.
  *
  * Fixtures covered: `42 Baker Street`, `1600 Pennsylvania Avenue`,
  * `10 Apollo Court NW`, `221 Baker St`, `10 Downing Street`,
  * `42 McLane Drive`, `10 LA Cienega Boulevard`. Apostrophes (O'Brien) and
- * non-English postal formats remain future work (R1).
+ * non-English postal formats remain future work.
  */
 export function addressPattern(): RegExp {
   return /\b\d{1,6}(?: [A-Z][a-zA-Z]{0,15}){1,5} (?:Avenue|Ave|Street|St|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl|Terrace|Ter|Highway|Hwy|Parkway|Pkwy)(?: (?:NW|NE|SW|SE|N|S|E|W))?\b/g;
+}
+
+/**
+ * French street address — number-first, lowercase or capitalised street-type
+ * keyword, optional `bis`/`ter`/`quater` modifier, 1-6 follow-on name tokens.
+ *
+ * Forms covered:
+ *   - `12 rue de la Paix`
+ *   - `5 Boulevard Saint-Germain`
+ *   - `3 avenue des Champs-Élysées`
+ *   - `7 bis rue Lafayette`
+ *   - `14 place de la République`
+ *
+ * ReDoS-safe: single bounded `{1,6}` quantifier over disjoint-boundary
+ * name tokens, each `[A-Za-zÀ-ÿ'][\w'-]{0,20}`. No nested quantifiers.
+ * Street-type list is a closed alternation of common FR terms.
+ */
+export function addressFrPattern(): RegExp {
+  // After the street-type keyword, each name token is either a
+  // capitalised word (plain or hyphenated like `Champs-Élysées`,
+  // `Saint-Germain`) OR a short lowercase connector (`de`, `des`, `du`,
+  // `la`, `le`, `les`, `aux`, `et`, `en`, `à`). Restricting to these two
+  // shapes prevents the `{1,6}` quantifier from greedily absorbing
+  // adjacent free-text words (`depuis`, `ouvert`, `demain`, ...).
+  // ReDoS-safe: bounded quantifier, disjoint-boundary tokens.
+  return /\b\d{1,4}(?:\s+(?:bis|ter|quater))?\s+(?:rue|Rue|RUE|boulevard|Boulevard|BOULEVARD|bd\.|Bd\.|avenue|Avenue|AVENUE|av\.|Av\.|place|Place|PLACE|all[ée]e|All[ée]e|chemin|Chemin|impasse|Impasse|quai|Quai|route|Route|cours|Cours|square|Square)(?:\s+(?:[A-Z\u00C0-\u00DD][A-Za-z\u00C0-\u00FF'-]{0,20}|de|des|du|la|le|les|l'|d'|aux|et|en|[aà])){1,6}\b/g;
+}
+
+/**
+ * German street address — number-after form with closed-set compound suffix.
+ *
+ * Forms covered:
+ *   - `Hauptstraße 23`        (-straße suffix)
+ *   - `Goethestrasse 45`      (-strasse, Swiss spelling)
+ *   - `Müllerstr. 12`         (-str. abbreviation)
+ *   - `Alexanderplatz 5`      (-platz)
+ *   - `Lindenallee 8`         (-allee)
+ *
+ * ReDoS-safe: single bounded quantifier on the name prefix
+ * `[A-ZÄÖÜ][a-zäöüß]{1,30}`, followed by a closed alternation of
+ * compound suffixes. No nested quantifiers.
+ *
+ * Note: multi-word prefix forms (e.g. "Unter den Linden 5") are not
+ * covered in v1.1; they are a documented residual gap (low frequency in
+ * CV text). Compound-suffix form is the dominant modern-German pattern.
+ */
+export function addressDePattern(): RegExp {
+  return /\b[A-Z\u00C4\u00D6\u00DC][a-z\u00E4\u00F6\u00FC\u00DF]{1,30}(?:stra(?:\u00DFe|sse)|str\.|platz|weg|allee|gasse|ring|damm)\s+\d{1,4}[a-z]?\b/g;
+}
+
+/**
+ * Italian street address — prefix-keyword form with 1-5 name tokens, then
+ * house number.
+ *
+ * Forms covered:
+ *   - `Via Roma 15`
+ *   - `Piazza del Duomo 7`
+ *   - `Corso Vittorio Emanuele 12`
+ *   - `Viale della Libertà 23`
+ *
+ * ReDoS-safe: single bounded `{1,5}` quantifier over name tokens
+ * `[A-Za-zÀ-ÿ'][\w'-]{0,20}`, closed-set prefix alternation.
+ */
+export function addressItPattern(): RegExp {
+  return /\b(?:Via|Viale|Corso|Piazza|Piazzale|Largo|Vicolo|Strada|Borgo|Contrada|Localit[aà])(?:\s+[A-Za-z\u00C0-\u00FF'][\w\u00C0-\u00FF'-]{0,20}){1,5}\s+\d{1,4}\b/g;
+}
+
+/**
+ * Spanish street address — prefix-keyword form with 1-5 name tokens, then
+ * house number.
+ *
+ * Forms covered:
+ *   - `Calle Mayor 10`
+ *   - `Avenida de la Constitución 5`
+ *   - `Plaza España 3`
+ *   - `Paseo de la Castellana 45`
+ *   - `Av. Diagonal 220`        (Av. abbreviation)
+ *
+ * ReDoS-safe: bounded `{1,5}` quantifier over name tokens, closed-set
+ * prefix alternation including common abbreviations (Av., Avda., C/, Pza.).
+ */
+export function addressEsPattern(): RegExp {
+  return /\b(?:Calle|CALLE|C\/|Avenida|AVENIDA|Av\.|Avda\.|Plaza|PLAZA|Pza\.|Paseo|P\u00BA\.|Ronda|Travesia|Traves[ií]a|Camino|Carrer|Glorieta)(?:\s+[A-Za-z\u00C0-\u00FF'][\w\u00C0-\u00FF'-]{0,20}){1,5}\s+\d{1,4}\b/g;
+}
+
+/**
+ * Portuguese street address — prefix-keyword form with 1-5 name tokens,
+ * then house number.
+ *
+ * Forms covered:
+ *   - `Rua das Flores 45`
+ *   - `Avenida da Liberdade 110`
+ *   - `Praça do Comércio 5`
+ *   - `Largo do Carmo 12`
+ *
+ * ReDoS-safe: bounded `{1,5}` quantifier over name tokens, closed-set
+ * prefix alternation (Rua, R., Avenida, Av., Praça, Largo, Travessa,
+ * Alameda, Beco, Estrada, Calçada).
+ */
+export function addressPtPattern(): RegExp {
+  return /\b(?:Rua|R\.|Avenida|AVENIDA|Av\.|Pra\u00E7a|Largo|Travessa|Alameda|Beco|Estrada|Cal\u00E7ada)(?:\s+[A-Za-z\u00C0-\u00FF'][\w\u00C0-\u00FF'-]{0,20}){1,5}\s+\d{1,4}\b/g;
+}
+
+/**
+ * UK postcode — alphanumeric outward + inward code separated by space.
+ *
+ * Forms covered:
+ *   - `SW1A 2AA`, `EC1A 1BB`, `M1 1AE`, `W1A 0AX`, `B33 8TH`, `L1 8JQ`
+ *
+ * Pattern: 1-2 letters + 1 digit + optional digit-or-letter (outward),
+ * then mandatory space, then digit + 2 letters (inward). Case-sensitive
+ * uppercase per Royal Mail convention; lowercase postcodes in free text
+ * are out-of-scope for v1.1 (documented residual gap).
+ *
+ * ReDoS-safe: no quantifier ambiguity, all bounded and disjoint.
+ */
+export function postcodeUkPattern(): RegExp {
+  return /\b[A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2}\b/g;
+}
+
+/**
+ * French postcode — 5 digits followed by a capitalised city token.
+ *
+ * Forms covered:
+ *   - `75001 Paris`, `69002 Lyon`, `13001 Marseille`
+ *
+ * Requires a capitalised city-like word to follow (`[A-ZÀ-ÿ][a-zà-ÿ'-]{2,}`)
+ * so bare numeric 5-digit sequences (order numbers, SKUs, years expressed
+ * as 5 digits) do not false-positive. This is a deliberate precision/recall
+ * trade: bare `\d{5}` alone is too broad; postcode + city is the actual
+ * re-identification surface flagged by compliance review §5.2.
+ *
+ * ReDoS-safe: bounded segments, no nested quantifiers.
+ */
+export function postcodeFrPattern(): RegExp {
+  return /\b\d{5}\s+[A-Z\u00C0-\u00DC][a-z\u00E0-\u00FF'-]{2,30}\b/g;
+}
+
+/**
+ * German postcode — 5 digits followed by a capitalised city token.
+ * Same rationale + shape as French. Covers Berlin (10xxx), München (8xxxx),
+ * Hamburg (2xxxx) etc.
+ */
+export function postcodeDePattern(): RegExp {
+  return /\b\d{5}\s+[A-Z\u00C4\u00D6\u00DC][a-z\u00E4\u00F6\u00FC\u00DF'-]{2,30}\b/g;
+}
+
+/**
+ * Italian postcode — 5 digits (CAP) followed by a capitalised city token.
+ * Same shape as FR/DE postcodes. Covers 00100-98168 mainland + Sicily +
+ * Sardinia.
+ */
+export function postcodeItPattern(): RegExp {
+  return /\b\d{5}\s+[A-Z\u00C0-\u00DC][a-z\u00E0-\u00FF'-]{2,30}\b/g;
+}
+
+/**
+ * Spanish postcode — 5 digits followed by a capitalised city token.
+ * Same shape as FR/DE/IT. Covers 01xxx-52xxx mainland + Canarias.
+ */
+export function postcodeEsPattern(): RegExp {
+  return /\b\d{5}\s+[A-Z\u00C0-\u00DC][a-z\u00E0-\u00FF'-]{2,30}\b/g;
+}
+
+/**
+ * Portuguese postcode — distinctive 4-digit + dash + 3-digit format, with
+ * optional following city token.
+ *
+ * Forms covered:
+ *   - `1200-195 Lisboa`, `4050-123 Porto`, `1200-195` (bare)
+ *
+ * The 4-3 shape is distinctive enough that city context is NOT required —
+ * there are few natural language contexts where `NNNN-NNN` digit patterns
+ * occur incidentally.
+ *
+ * ReDoS-safe: bounded segments, optional suffix is also bounded.
+ */
+export function postcodePtPattern(): RegExp {
+  return /\b\d{4}-\d{3}(?:\s+[A-Z\u00C0-\u00DC][a-z\u00E0-\u00FF'-]{2,30})?\b/g;
 }
 
 /**
@@ -166,18 +350,59 @@ export function dobPattern(): RegExp {
 }
 
 /**
- * Named export of all v1.0.0 patterns for programmatic composition.
+ * Per-locale address factory dictionary (v1.1 — R1 resolution).
+ *
+ * Each key is a factory function returning a fresh `/g` RegExp on every
+ * call (IMP-1 pattern).
+ */
+export const addressByLocale = {
+  en: addressPattern,
+  fr: addressFrPattern,
+  de: addressDePattern,
+  it: addressItPattern,
+  es: addressEsPattern,
+  pt: addressPtPattern,
+} as const;
+
+/**
+ * Per-locale bare-postcode factory dictionary (v1.1 — R1 resolution).
+ *
+ * Each key is a factory function returning a fresh `/g` RegExp on every
+ * call. Postcodes redact to the new `[postcode]` token (additive — no
+ * collision with v1.0.0 tokens).
+ */
+export const postcodeByLocale = {
+  uk: postcodeUkPattern,
+  fr: postcodeFrPattern,
+  de: postcodeDePattern,
+  it: postcodeItPattern,
+  es: postcodeEsPattern,
+  pt: postcodePtPattern,
+} as const;
+
+/**
+ * Named export of all patterns for programmatic composition.
  *
  * Each value is a factory function — call with `()` to get a fresh `/g`
  * RegExp instance. See the file-level "Why factories" note for the
  * stateful-lastIndex rationale.
+ *
+ * v1.1 additions:
+ *   - `addressByLocale` — per-locale address factory dictionary.
+ *   - `postcodeByLocale` — per-locale bare-postcode factory dictionary.
+ *   - `address` alias retained: `piiPatterns.address === piiPatterns.addressByLocale.en`
+ *     (backward-compat with v1.0.0 consumers).
  */
 export const piiPatterns = {
   email: emailPattern,
-  address: addressPattern,
+  address: addressPattern, // backward-compat alias for addressByLocale.en
+  addressByLocale,
+  postcodeByLocale,
   phoneInternational: phoneInternationalPattern,
   phoneDomestic: phoneDomesticPattern,
   dob: dobPattern,
 } as const;
 
 export type PiiPatternName = keyof typeof piiPatterns;
+export type AddressLocale = keyof typeof addressByLocale;
+export type PostcodeLocale = keyof typeof postcodeByLocale;

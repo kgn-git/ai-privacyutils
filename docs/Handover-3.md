@@ -97,7 +97,7 @@ Conclusion: the perf flake is a pre-existing Windows/vitest cold-start character
 - **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19)
 - **First-pass verdict:** Fix first — 1 Important finding (**IMP-1**)
 - **IMP-1 summary:** Handover §134 (old framing) claimed the trailing lookahead `(?![\p{L}\p{N}-])` "correctly rejects" `user@example.中国后文字` as a "too-long TLD". Factually wrong: the TLD quantifier `[\p{L}]{2,24}` greedily consumes the 5 trailing Unicode letters (within the 24-char ceiling), so the whole string matches as a single email. Functional outcome (over-redaction of an email-shaped Unicode token) is the correct privacy trade-off — only the description was misleading, and no test documented the greedy behaviour.
-- **Fix commits:** [SHA-FIX]
+- **Fix commits:** `bcd5346`
   - Rewrote handover §134 to describe the actual greedy behaviour and the intentional privacy trade-off, explicitly noting the lookahead prevents extension into following chars but does not truncate at semantic TLD boundaries.
   - Added a documenting test `greedily matches Unicode-word TLD with no separator (over-redaction acceptable for privacy)` to `src/__tests__/idn-email.test.ts`, co-located with the other IDN TLD tests in the first `describe` block.
 - **Critical findings:** none

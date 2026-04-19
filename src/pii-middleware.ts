@@ -4,6 +4,18 @@ import { sanitizePii } from './sanitize-pii.js';
 import type { TokenFormat } from './token-format.js';
 
 /**
+ * Options forwarded into each `sanitizePii` call during middleware
+ * transform. Kept as an internal shape (distinct from the public
+ * `PiiMiddlewareOptions`) so the internal helpers thread a tidy bundle
+ * instead of drifting positional-arg signatures each time a new option
+ * lands.
+ */
+interface PartOptions {
+  tokenFormat: TokenFormat | undefined;
+  maxInputLength: number | undefined;
+}
+
+/**
  * Type-loose representation of a single provider-layer message part.
  *
  * Vercel AI SDK v4 provider-layer content parts are one of:
@@ -29,18 +41,37 @@ function deepClone<T>(value: T): T {
 
 /**
  * Redact a single content part in place on a cloned object. Returns the
- * (possibly-replaced) part. `tokenFormat` is threaded through to every
- * `sanitizePii` call per issue #9 / compliance §R8.
+ * (possibly-replaced) part. Options are threaded through to every
+ * `sanitizePii` call per issues #9 (tokenFormat) and #10 (maxInputLength).
+ *
+ * `sanitizePii` may throw `PiiInputTooLargeError` if the part's text
+ * exceeds the configured cap; the error propagates out of `redactPart`
+ * through `redactMessage` → `redactPrompt` → `transformParams`. This is
+ * the intended behaviour — the AI SDK's `transformParams` signature allows
+ * throws and the caller should treat over-cap prompts as a caller-side
+ * error, not a silent redaction gap.
  */
 function redactPart(
   part: UnknownPart,
-  tokenFormat: TokenFormat | undefined,
+  opts: PartOptions,
 ): UnknownPart {
   if (part['type'] === 'text' && typeof part['text'] === 'string') {
-    return { ...part, text: sanitizePii(part['text'], { tokenFormat }) };
+    return {
+      ...part,
+      text: sanitizePii(part['text'], {
+        tokenFormat: opts.tokenFormat,
+        maxInputLength: opts.maxInputLength,
+      }),
+    };
   }
   if (part['type'] === 'reasoning' && typeof part['text'] === 'string') {
-    return { ...part, text: sanitizePii(part['text'], { tokenFormat }) };
+    return {
+      ...part,
+      text: sanitizePii(part['text'], {
+        tokenFormat: opts.tokenFormat,
+        maxInputLength: opts.maxInputLength,
+      }),
+    };
   }
   return part;
 }
@@ -50,18 +81,24 @@ function redactPart(
  */
 function redactMessage(
   message: Record<string, unknown>,
-  tokenFormat: TokenFormat | undefined,
+  opts: PartOptions,
 ): Record<string, unknown> {
   const content = message['content'];
   if (typeof content === 'string') {
-    return { ...message, content: sanitizePii(content, { tokenFormat }) };
+    return {
+      ...message,
+      content: sanitizePii(content, {
+        tokenFormat: opts.tokenFormat,
+        maxInputLength: opts.maxInputLength,
+      }),
+    };
   }
   if (Array.isArray(content)) {
     return {
       ...message,
       content: content.map((part) =>
         typeof part === 'object' && part !== null
-          ? redactPart(part as UnknownPart, tokenFormat)
+          ? redactPart(part as UnknownPart, opts)
           : part,
       ),
     };
@@ -73,17 +110,17 @@ function redactMessage(
  * Redact the entire `prompt` field, which may be either a string (Vercel
  * Core-level shape) or an array of messages (provider-level shape).
  */
-function redactPrompt(
-  prompt: unknown,
-  tokenFormat: TokenFormat | undefined,
-): unknown {
+function redactPrompt(prompt: unknown, opts: PartOptions): unknown {
   if (typeof prompt === 'string') {
-    return sanitizePii(prompt, { tokenFormat });
+    return sanitizePii(prompt, {
+      tokenFormat: opts.tokenFormat,
+      maxInputLength: opts.maxInputLength,
+    });
   }
   if (Array.isArray(prompt)) {
     return prompt.map((msg) =>
       typeof msg === 'object' && msg !== null
-        ? redactMessage(msg as Record<string, unknown>, tokenFormat)
+        ? redactMessage(msg as Record<string, unknown>, opts)
         : msg,
     );
   }
@@ -104,6 +141,20 @@ export interface PiiMiddlewareOptions {
    *     `<<REDACTED_DOB>>`. Pattern-disjoint, low-collision variant.
    */
   tokenFormat?: TokenFormat;
+  /**
+   * Runtime input-length cap in JS string code units (v1.1 — issue #10 /
+   * security review R7). Threaded into every `sanitizePii` call made by
+   * `transformParams` — applied per individual text string (each string
+   * prompt, each string message content, each text / reasoning part).
+   *
+   * An over-cap part causes `sanitizePii` to throw `PiiInputTooLargeError`,
+   * which propagates out of `transformParams` unwrapped (the AI SDK
+   * contract permits throws — treat as caller-side error).
+   *
+   * Default: `DEFAULT_MAX_INPUT_LENGTH` (500_000 code units). See
+   * `./limits.ts` and ADR 002 (`docs/adr/002-input-length-cap.md`).
+   */
+  maxInputLength?: number;
 }
 
 /**
@@ -129,11 +180,13 @@ export function createPiiMiddleware(
   options?: PiiMiddlewareOptions,
 ): LanguageModelV1Middleware {
   const tokenFormat = options?.tokenFormat;
+  const maxInputLength = options?.maxInputLength;
+  const opts: PartOptions = { tokenFormat, maxInputLength };
   return {
     transformParams: async ({ params }) => {
       const next = deepClone(params) as Record<string, unknown>;
       if ('prompt' in next) {
-        next['prompt'] = redactPrompt(next['prompt'], tokenFormat);
+        next['prompt'] = redactPrompt(next['prompt'], opts);
       }
       return next as typeof params;
     },

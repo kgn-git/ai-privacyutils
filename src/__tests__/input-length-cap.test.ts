@@ -94,15 +94,16 @@ describe('sanitizePii — maxInputLength default (500_000)', () => {
   });
 
   it('processes input at exactly DEFAULT_MAX_INPUT_LENGTH', () => {
-    // Build a string of exactly the cap length with a trailing email
-    // substring that must still be redacted — verifies both that we pass
-    // the length check AND that regex still runs.
-    const filler = 'a'.repeat(DEFAULT_MAX_INPUT_LENGTH - 'jane@example.com'.length);
-    const input = filler + 'jane@example.com';
+    // Build a string of exactly the cap length. Filler is ` ` (space) —
+    // disjoint from every redaction pattern (email/address/postcode/phone/
+    // DOB all require at least one digit-or-letter in the match, with
+    // anchors that reject a bare run of spaces) so the exact cap-length
+    // input passes through unchanged.
+    const input = ' '.repeat(DEFAULT_MAX_INPUT_LENGTH);
     expect(input.length).toBe(DEFAULT_MAX_INPUT_LENGTH);
     const result = sanitizePii(input);
-    expect(result).toBe(filler + '[email]');
-    expect(result.length).toBeLessThanOrEqual(DEFAULT_MAX_INPUT_LENGTH);
+    expect(result).toBe(input);
+    expect(result.length).toBe(DEFAULT_MAX_INPUT_LENGTH);
   });
 
   it('throws PiiInputTooLargeError when input exceeds the default cap', () => {

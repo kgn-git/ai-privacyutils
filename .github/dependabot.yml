@@ -28,6 +28,12 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Block major-version bumps per policy 2026-04-19 (see privacyutils#24).
+      # Minor + patch updates still land; security-advisory updates are unaffected.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: github-actions
     directory: /
@@ -41,3 +47,9 @@ updates:
       - github-actions
     reviewers:
       - kgn-git/privacy-utils-maintainers
+    ignore:
+      # Block major-version bumps per policy 2026-04-19 (see privacyutils#24).
+      # Minor + patch updates still land; security-advisory updates are unaffected.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"

@@ -1,0 +1,70 @@
+{
+  "name": "@kgn-git/privacy-utils",
+  "version": "1.0.0",
+  "description": "Canonical PII-redaction library for the Jobflow programme. Provides sanitizePii, piiPatterns, and a Vercel AI SDK middleware (piiMiddleware) for closing GDPR Art. 5(1)(c)/25/32 gaps on LLM prompt emission.",
+  "keywords": [
+    "pii",
+    "redaction",
+    "gdpr",
+    "privacy",
+    "ai-sdk",
+    "middleware",
+    "jobflow"
+  ],
+  "license": "UNLICENSED",
+  "private": false,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "CONTRIBUTING.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kgn-git/jobflow-privacyutils.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kgn-git/jobflow-privacyutils/issues"
+  },
+  "homepage": "https://github.com/kgn-git/jobflow-privacyutils#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "redos:scan": "recheck src/patterns.ts --timeout 30000",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "ai": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "ai": "^4.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-redos": "^4.5.0",
+    "recheck": "^4.5.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+# Sample .npmrc for consumer repositories (jobflow-scoring, jobflow-platform).
+# Copy to repo root as `.npmrc` and ensure NODE_AUTH_TOKEN / GITHUB_TOKEN is set
+# in CI environment with `read:packages` scope.
+
+@kgn-git:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+always-auth=true

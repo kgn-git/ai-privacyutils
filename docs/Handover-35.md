@@ -178,9 +178,46 @@ The publish workflow is pinned (by SHA) to `actions/attest-build-provenance@v2.3
 
 **Merge authorised by SD-002 amended process.** User authorisation still required for the merge button + downstream tag-push decisions.
 
+PR #16 merged at commit `680127e` on 2026-04-19 per user authorisation.
+
 ---
 
-## User-manual steps gating v1.0.0 tag push
+## Security Posture Decision — 2026-04-19 (reduced tier, solo-private-internal)
+
+User decision 2026-04-19: reduced hardening tier appropriate to the solo-private-internal threat model. S1-S11 from the `/security-expert` review were scoped for a generic production-grade supply-chain threat model; this package's actual context (solo-operator `kgn-git` org, private repo, private GitHub Packages registry, internal consumers `jobflow-scoring` + `jobflow-platform` only) warrants a reduced tier.
+
+**Kept (in v1.0.0):**
+
+- **S4** npm `--provenance` attestation (automated in `publish.yml`)
+- **S5** `recheck` v4.x ReDoS CI lint (automated in `ci.yml`)
+- **S6** `dependency-review-action@v4` (automated in `ci.yml`)
+- **S7** Dependabot (automated via `.github/dependabot.yml`)
+- **S10** Consumer `.npmrc` scope pin — filed as [jobflow-scoring#96](https://github.com/kgn-git/jobflow-scoring/issues/96) + [jobflow-platform#489](https://github.com/kgn-git/jobflow-platform/issues/489); cross-repo work
+- **S11** README Security Posture section (authored in `README.md`)
+
+**Deferred — upgrade path preserved:**
+
+- **S1** `main` branch protection ruleset — requires GitHub Pro on private repos; ruleset JSON preserved at `.github/branch-rulesets/main.json` ready to apply
+- **S2** Tag ruleset on `v*.*.*` — same GitHub Pro requirement; JSON preserved at `.github/branch-rulesets/tags.json`
+- **S3** GPG-signed tags with hardware token — runbook preserved at `docs/SIGNING-TAGS.md`; unsigned tag used for v1.0.0
+- **S8** Socket.dev GitHub App — third-party behavioural-analysis service; can be installed later
+
+**Verified (nominal for solo org):**
+
+- **S9** Org 2FA enforcement — user confirms 2FA is enabled on their personal account, which effectively covers the solo-operator case
+
+**Re-upgrade triggers (revisit deferred items if any of these occur):**
+
+- `kgn-git` org grows beyond solo operator → apply S1 + S9 (enforce 2FA on all members)
+- External consumers onboarded beyond `jobflow-scoring` + `jobflow-platform` → apply S1/S2/S3 for audit trail
+- Compliance audit requirement emerges (investor due-diligence, regulatory review, etc.) → apply S3 for tag-level audit
+- Socket.dev becomes readily available or free tier fits → apply S8 (zero-cost defence-in-depth)
+
+**The "User-manual steps gating v1.0.0 tag push" section below is superseded by this decision for S1/S2/S3/S8.** S9 is verified. v1.0.0 tag push is authorised.
+
+---
+
+## User-manual steps gating v1.0.0 tag push (SUPERSEDED 2026-04-19 — retained for historical reference)
 
 The following MUST complete before the tag `v1.0.0` can be safely pushed. Ordered by criticality:
 

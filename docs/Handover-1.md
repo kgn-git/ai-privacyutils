@@ -55,7 +55,7 @@ discipline preserved).
 | Middleware end-to-end tests for each locale | ✅ | `src/__tests__/pii-middleware.test.ts:152-264` — 7 integration cases (FR/DE/IT/ES/PT/UK full CV headers via `piiMiddleware.transformParams` + Italian provider-layer content-parts shape) |
 | README Known Limitations: remove R1 from the "caller-level scrubbing" list; note remaining gaps | ✅ | `README.md` § Known Limitations — R1 marked **Resolved in v1.1**; new R1-residual row added (apostrophes in names, DE multi-word prefix forms, non-EU locales, all-caps headers, lowercase UK postcodes); C2 paragraph reshuffled to note caller-side scrubbing now only needed for R2 (phone) until v1.2 |
 | package.json version — either bump to 1.1.0-dev or keep at 1.0.0 (document choice in handover) | ✅ | `package.json:3` → `"version": "1.1.0-dev"`. Choice rationale: signals the package is in active v1.1 development on this branch; tag cut to `v1.1.0` happens at Sprint 2K.A close (not in this PR per dispatch-prompt constraint "Do NOT tag `v1.1.0`") |
-| Benchmark: middleware overhead <10ms on 10KB prompt | ✅ | `src/__tests__/locale-patterns.test.ts:472-501` — 10-run warm-up + mean test on ~10KB prompt with mixed EU PII. Test passes in CI (actual mean typically sub-millisecond on modern hardware; budget has large headroom) |
+| Benchmark: `sanitizePii` regex overhead <10ms on 10KB plain string (deepClone not included) | ✅ (scope corrected per SD-002 IMP-1 2026-04-19) | `src/__tests__/locale-patterns.test.ts:472-501` — 10-run warm-up + mean test on ~10KB prompt with mixed EU PII. Measures `sanitizePii` call only, not `piiMiddleware.transformParams`. Middleware-level benchmark (including the JSON.parse deep-clone of structured params) is tracked as a pre-tag follow-up — see handover § Known Tech Debt and will land before the v1.1.0 tag is cut |
 | `npm run redos:scan` green on all new patterns | ✅ | 16/16 patterns SAFE per `recheck` v4.x. `scripts/redos-scan.mjs` extended to import all 11 new locale factories. Scan output pasted in § Gate results below |
 | All existing 55/55 tests still pass; new fixtures added | ✅ | Test count: 55 baseline + 55 locale + 7 middleware-integration = **117/117 passing**. Zero regression on v1.0.0 fixtures (Baker Street, Pennsylvania Avenue, 10 Downing Street, McLane Drive, LA Cienega Boulevard all green) |
 
@@ -216,17 +216,17 @@ All 16 patterns pass `recheck` v4.x "safe" verdict.
 
 ## Code Review
 
-<Pending dispatcher review per SD-002 amended 2026-04-15. /developer does
-not populate this section; the dispatcher (programme-manager at top-level
-session scope) runs `Agent(subagent_type="feature-dev:code-reviewer", ...)`
-against `feat/1-r1-locale-aware-addresses` after /developer returns, then
-populates this section with findings.>
-
-- Verdict: *pending dispatcher review*
-- Critical findings: *pending*
-- Important findings: *pending*
-- Minor findings: *pending*
-- Fix commit(s): *pending*
+- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session scope)
+- Base SHA: `origin/main` at review time (post-pivot HEAD — `8e79457` or later)
+- Head SHA at review: `f31a7ef`
+- Verdict: **Ready to merge** (1 Important + 2 Minor; all resolvable pre-tag or as follow-ups)
+- Critical findings: 0
+- Important findings: 1 — **IMP-1** Benchmark scope-mismatch: AC wording said "middleware overhead" but test measures `sanitizePii` regex-only overhead (`deepClone` + `JSON.parse(JSON.stringify(params))` not included). Reviewer's Option (a) documentation fix applied inline in this handover's AC state table (above); Option (b) middleware-level benchmark filed as pre-tag follow-up — see § Known Tech Debt.
+- Minor findings: 2 — **MIN-1** no explicit false-positive test for Italian `Via` in non-address prose (additive test; filed as follow-up). **MIN-2** FR/DE/IT/ES postcode factories are byte-identical; locale separation is nominal not functional — document in JSDoc as follow-up.
+- Deviations verified clean: `1.1.0-dev` SemVer valid per §9; RED commit purity accepted on handover representation; DE multi-word prefix + bare-postcode deliberate gaps correctly documented.
+- Focus-area spot-checks all PASS: all 10 compliance-review-cited address examples (FR/DE/IT/ES/PT) match their expected locale regex; ReDoS spot-check on FR pattern confirms no nested quantifier / alternation-overlap backtracking path; backward compatibility (`piiPatterns.address === piiPatterns.addressByLocale.en`) pinned by test; middleware integration tests exercise `piiMiddleware.transformParams` not bare `sanitizePii`; README Known Limitations correctly strikes R1 + adds R1-residual row + updates C2 paragraph.
+- Fix commits (IMP-1 Option a — documentation-only): this commit corrects the AC state-table entry + adds MIN-1/MIN-2/IMP-1-option-b follow-up notes to § Known Tech Debt
+- Re-review: N/A — reviewer's verdict is "Ready to merge" with IMP-1 Option (a) as the minimum acceptable fix and Option (b) deferrable to pre-tag. Inline docs correction + follow-up tracking is the acknowledged minimum path. No re-review cycle required per SD-002 small-scope-pin carve-out (reviewer-provided exact wording, docs-only change).
 
 ---
 
@@ -256,6 +256,10 @@ populates this section with findings.>
   - Bare 5-digit continental postcodes without city context (deliberate precision/recall trade, not a bug).
 - **R2 EU mobile phone formats** still not covered (`libphonenumber-js` integration tracked as issue #2, v1.1 scope).
 - **`recheck` scan** currently runs with the default budget. A property-based fuzzing stage would further harden FR pattern — low priority for v1.1.
+- **SD-002 review follow-ups (pre-tag / housekeeping — filed as `#23`):**
+  - **IMP-1 Option (b)** — Add a middleware-level benchmark that measures `piiMiddleware.transformParams` end-to-end (including the `JSON.parse(JSON.stringify(params))` deep-clone of structured params) on a realistic 10KB provider-layer params object. Must land before `v1.1.0` tag cut. Option (a) doc correction applied inline in this handover per SD-002 small-scope-pin carve-out.
+  - **MIN-1** — Add an explicit false-positive test for Italian `Via` in non-address prose (e.g. `Via Lattea visible from the observatory.` → NOT redacted; `accessed via port 443` → NOT redacted). Additive test; low urgency.
+  - **MIN-2** — FR/DE/IT/ES postcode factories are byte-identical with minor char-class variation; add JSDoc note to each factory that locale keys are organisational (patterns overlap by design; all four match the same 5-digit + capitalised-city shape).
 
 ---
 

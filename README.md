@@ -1,6 +1,6 @@
 # `@kgn-git/privacy-utils`
 
-Canonical PII-redaction library for the Jobflow programme. Provides pure `sanitizePii`, composable `piiPatterns`, and a Vercel AI SDK middleware (`piiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call.
+Canonical PII-redaction library for the Jobflow programme. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`) per compliance review §R8.
 
 v1.0.0 ships the first-ever PII redaction on the Jobflow platform's LLM path, closing a pre-existing GDPR Art. 5(1)(c) / 25 / 32 compliance gap. It is consumed by [`jobflow-scoring`](https://github.com/kgn-git/jobflow-scoring) (scoring#82) and [`jobflow-platform`](https://github.com/kgn-git/jobflow-platform) (platform#476).
 
@@ -64,6 +64,36 @@ const cleaned = sanitizePii(rawCvText);
 // "Jane Doe, jane@example.com, (555) 123-4567, 42 Baker Street" →
 // "Jane Doe, [email], [phone], [address]"
 ```
+
+### Opt-in sentinel tokens (v1.1 — issue #9 / compliance §R8)
+
+By default the redaction tokens are the readable `[email]`, `[phone]`, `[address]`, `[postcode]`, `[dob]` (v1.0.0 byte-identical). These are convenient for debug but collide with user-authored literals — a user writing `"enquiries via the [email] form"` has indistinguishable output from a genuine `[email]` redaction. Opt into the low-collision sentinel form with the `tokenFormat` option:
+
+```ts
+import { sanitizePii, createPiiMiddleware } from '@kgn-git/privacy-utils';
+
+// Direct function — per-call:
+sanitizePii('Contact jane@example.com.', { tokenFormat: 'sentinel' });
+// → "Contact <<REDACTED_EMAIL>>."
+
+// Middleware factory — per-instance:
+const mw = createPiiMiddleware({ tokenFormat: 'sentinel' });
+// wrapLanguageModel({ model, middleware: mw });
+```
+
+Sentinel mapping (all 5 token kinds covered):
+
+| Kind | Readable (default) | Sentinel |
+|---|---|---|
+| Email | `[email]` | `<<REDACTED_EMAIL>>` |
+| Address | `[address]` | `<<REDACTED_ADDRESS>>` |
+| Postcode | `[postcode]` | `<<REDACTED_POSTCODE>>` |
+| Phone | `[phone]` | `<<REDACTED_PHONE>>` |
+| DOB | `[dob]` | `<<REDACTED_DOB>>` |
+
+**Backward-compat contract.** `sanitizePii(text)` with no options — and `piiMiddleware` — produce v1.0.0 byte-identical output. `createPiiMiddleware()` with no options is equivalent to the default `piiMiddleware`. The default swap to sentinel is deferred to v2.0 (major bump).
+
+**Idempotency invariant.** The sentinel strings (`<<REDACTED_*>>`) are structurally pattern-disjoint from every v1.x redaction pattern — no `@`, no digits, no `\b\d` prefix, no lowercase street-type keyword, no closed-set prefix keyword. Running `sanitizePii` twice in either format is a strict no-op; sentinel output sanitised again in readable mode is also a no-op. The ADR + invariant proof lives in `src/token-format.ts`.
 
 ### Programmatic pattern access
 
@@ -144,6 +174,7 @@ v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/I
 | R3 | Applicant's full name in CV header flows unredacted. Regex is an inappropriate tool (CVs are lists of proper nouns — company names, universities, referees). NER is the right tool. | Medium | Not mitigated | v1.2 — NER-based name redaction (Microsoft Presidio or equivalent) |
 | R5 | IDN email addresses with non-ASCII local or domain part (`françois@école.fr`, `user@münchen.de`) pass through unredacted. Punycode-encoded (`xn--…`) addresses DO match. | Low | Not mitigated | v1.2 — widen character classes / validated-email parser |
 | R10 | National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors. | Low | Not mitigated | v1.2 — national-ID pattern set |
+| R8 | ~~Replacement tokens `[email]` / `[phone]` / `[address]` / `[postcode]` / `[dob]` collide with user-authored literal strings. Not cryptographically distinguishable from authored text.~~ **Resolved in v1.1** via opt-in `tokenFormat: 'sentinel'` option — produces `<<REDACTED_X>>` low-collision tokens. Default remains `'readable'` (v1.0.0 byte-identical); default swap to sentinel deferred to v2.0 for SemVer. | Low | **Resolved (opt-in)** | v1.1 (this release) |
 
 Both **R1** (v1.1 #1) and **R2** (v1.1 #2) are now in-package. Consuming apps no longer need caller-level scrubbing for FR/DE/IT/ES/PT structured addresses, UK/FR/DE/IT/ES/PT postcodes, or any of the six supported phone locales. For scoring, the existing `sanitizePii` on the chunker boundary (`cv-chunker.ts:186`, `cv-chunker.ts:203`) and post-LLM evidence-quote scrubbing (`llm-coverage.service.ts:178`) remain in place as defence-in-depth.
 
@@ -176,10 +207,12 @@ The package is compliance-critical — regressions in recall on canonical inputs
 
 | Change | Bump |
 |---|---|
-| Pattern removal or replacement-token rename (e.g. `[email]` → `<<REDACTED_EMAIL>>`) | **Major** |
+| Pattern removal | **Major** |
+| Default replacement-token rename (e.g. flipping default from `[email]` to `<<REDACTED_EMAIL>>` — scheduled for v2.0 per issue #9) | **Major** |
 | Order-of-application reshuffling that changes output on fixtures | **Major** |
 | New pattern (e.g. national-ID in v1.2) | **Minor** |
 | New locale coverage (e.g. FR/DE/IT/ES/PT addresses in v1.1) | **Minor** |
+| New opt-in option that preserves the v1.0.0 default output byte-identically (e.g. `tokenFormat: 'sentinel'` in v1.1) | **Minor** |
 | Pattern tuning — fewer false positives with same recall on all prior fixtures | **Patch** |
 | ReDoS-only rewrites that preserve byte-equivalent match behaviour on all fixtures | **Patch** |
 
@@ -187,9 +220,15 @@ Every tag cuts from `main` via a signed annotated tag (see S3). The CHANGELOG re
 
 ## API reference
 
-### `sanitizePii(text: string): string`
+### `sanitizePii(text: string, options?: SanitizePiiOptions): string`
 
 Pure, one-way redaction. Idempotent. Empty input returns empty string. Non-PII input returns input unchanged.
+
+Options (v1.1 — issue #9):
+
+- `options.tokenFormat?: 'readable' | 'sentinel'` — defaults to `'readable'` (v1.0.0 byte-identical). Pass `'sentinel'` for `<<REDACTED_X>>` low-collision tokens. See the Opt-in sentinel tokens section above.
+
+`SanitizePiiOptions` and `TokenFormat` are re-exported types.
 
 ### `piiPatterns`
 
@@ -211,6 +250,18 @@ Type exports: `PiiPatternName` (top-level `piiPatterns` keys), `AddressLocale` (
 ### `piiMiddleware: LanguageModelV1Middleware`
 
 Vercel AI SDK v4 middleware. Implements `transformParams` for both `type: 'generate'` and `type: 'stream'` calls. Walks `params.prompt` (string or provider-message array), scrubs string content and `type: 'text'` / `type: 'reasoning'` parts. Non-text parts (image / file / tool-call / tool-result) pass through untouched. Non-prompt params (temperature, maxTokens, etc.) preserved. Does not mutate caller input — clones first.
+
+`piiMiddleware` is the zero-config default (readable tokens, v1.0.0 byte-identical). It is structurally equivalent to `createPiiMiddleware()`.
+
+### `createPiiMiddleware(options?: PiiMiddlewareOptions): LanguageModelV1Middleware`
+
+Middleware factory (v1.1 — issue #9). Accepts `{ tokenFormat?: 'readable' | 'sentinel' }` and threads the format through every `sanitizePii` call inside `transformParams`. Use this to register a sentinel-format middleware:
+
+```ts
+const mw = createPiiMiddleware({ tokenFormat: 'sentinel' });
+```
+
+See also: `TOKEN_FORMATS` (constant), `tokensFor(format)` (resolver helper), and the `TokenFormat` / `TokenKind` / `PiiMiddlewareOptions` / `SanitizePiiOptions` type exports.
 
 ## Contributing
 

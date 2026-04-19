@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 
 import { sanitizePii } from '../sanitize-pii.js';
+import {
+  piiPatterns,
+  emailPattern,
+  addressPattern,
+  phoneInternationalPattern,
+  phoneDomesticPattern,
+  dobPattern,
+} from '../patterns.js';
 
 /**
  * Test suite for sanitizePii — ports the canonical behaviour from
@@ -79,6 +87,24 @@ describe('sanitizePii — street address redaction (ported from cv-chunker.ts:80
     const once = sanitizePii('met at 10 Downing Street for tea');
     const twice = sanitizePii(once);
     expect(twice).toBe(once);
+  });
+
+  it('redacts mixed-case street name (McLane) — CRIT-2 regression guard', () => {
+    // Pattern fix under CRIT-2: inner name class must accept BOTH upper and
+    // lower alpha so that mixed-case tokens like "McLane" match. The v1.0.0
+    // initial pattern used `[a-z]{1,15}` which rejected the capital "L".
+    expect(sanitizePii('Lives at 42 McLane Drive nowadays.')).toBe(
+      'Lives at [address] nowadays.',
+    );
+  });
+
+  it('redacts all-caps street token (LA Cienega) — CRIT-2 regression guard', () => {
+    // Bounded `{0,15}` on `[a-zA-Z]` also accepts the zero-length continuation
+    // that allows a 2-char all-caps token like "LA" to match against the
+    // leading `[A-Z]` + optional tail.
+    expect(sanitizePii('Dinner at 10 LA Cienega Boulevard tonight.')).toBe(
+      'Dinner at [address] tonight.',
+    );
   });
 });
 
@@ -271,5 +297,74 @@ describe('sanitizePii — cross-pattern integration', () => {
   it('returns input unchanged when no PII present', () => {
     const clean = 'A professional summary with no contact details.';
     expect(sanitizePii(clean)).toBe(clean);
+  });
+});
+
+describe('piiPatterns — factory-function API (IMP-1: fresh instances, no shared lastIndex)', () => {
+  /**
+   * v1.0.0 exports patterns as factory functions, not singleton RegExps.
+   * Rationale: module-level `/g`-flagged RegExps carry a stateful `lastIndex`
+   * which makes consecutive `.test()` / `.exec()` calls on the same instance
+   * alternate between match and no-match — a classic footgun. Factories
+   * return a fresh instance on every call so programmatic consumers cannot
+   * trip the stateful-lastIndex hazard.
+   *
+   * `sanitizePii` itself is safe either way (String.prototype.replace resets
+   * `lastIndex` internally) but external callers using `.test()` / `.exec()`
+   * need the fresh instance guarantee.
+   */
+
+  it('each export is a function (not a module-level RegExp)', () => {
+    expect(typeof emailPattern).toBe('function');
+    expect(typeof addressPattern).toBe('function');
+    expect(typeof phoneInternationalPattern).toBe('function');
+    expect(typeof phoneDomesticPattern).toBe('function');
+    expect(typeof dobPattern).toBe('function');
+  });
+
+  it('piiPatterns record exposes factory functions under canonical names', () => {
+    expect(typeof piiPatterns.email).toBe('function');
+    expect(typeof piiPatterns.address).toBe('function');
+    expect(typeof piiPatterns.phoneInternational).toBe('function');
+    expect(typeof piiPatterns.phoneDomestic).toBe('function');
+    expect(typeof piiPatterns.dob).toBe('function');
+  });
+
+  it('calling a factory returns a fresh RegExp with the /g flag', () => {
+    const re = piiPatterns.email();
+    expect(re).toBeInstanceOf(RegExp);
+    expect(re.flags).toContain('g');
+  });
+
+  it('two successive factory calls return DISTINCT RegExp instances (no shared state)', () => {
+    const a = piiPatterns.email();
+    const b = piiPatterns.email();
+    expect(a).not.toBe(b);
+  });
+
+  it('two successive .test() calls on separately-built regexes do NOT alternate', () => {
+    // With a single shared /g-flagged regex, .test() alternates true/false
+    // because lastIndex advances on match and resets on miss. Fresh instances
+    // must not show that behaviour.
+    const input = 'Mail jane@example.com now.';
+    const first = piiPatterns.email().test(input);
+    const second = piiPatterns.email().test(input);
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+  });
+
+  it('factory-returned RegExp does not leak a module-level shared source identity', () => {
+    // If the factory were just `() => SHARED_REGEX`, JSON-equivalence would
+    // still hold across calls, but the instance identity would match. We
+    // assert distinct instances (previous test) — this test ensures the
+    // factory pattern is genuinely building fresh regexes, not returning a
+    // singleton wrapped in a closure.
+    const a = piiPatterns.email();
+    const b = piiPatterns.email();
+    // Advance lastIndex on `a` by testing it.
+    a.test('foo@bar.com');
+    // `b` must remain at lastIndex 0 — would not be the case if a/b shared
+    // the underlying RegExp object.
+    expect(b.lastIndex).toBe(0);
   });
 });

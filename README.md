@@ -109,35 +109,47 @@ This package does not create a new Art. 13 disclosure obligation. Platform-side 
 | `piiPatterns.postcodeByLocale.it()` | Italian CAP 5-digit + city. Example: `00100 Roma`, `20121 Milano`. | `[postcode]` |
 | `piiPatterns.postcodeByLocale.es()` | Spanish 5-digit + city. Example: `28013 Madrid`, `08001 Barcelona`. | `[postcode]` |
 | `piiPatterns.postcodeByLocale.pt()` | Portuguese NNNN-NNN with optional city (shape is distinctive enough to match bare). Example: `1200-195 Lisboa`, `4050-123 Porto`, `1200-195`. | `[postcode]` |
-| `piiPatterns.phoneInternational()` | `+?CC-3-3-4` NANP-shape | `[phone]` |
+| `piiPatterns.phoneByLocale.fr()` | French phone validator (backed by `libphonenumber-js`). Returns a `(candidate: string) => boolean`. Matches native `06 12 34 56 78` 2-2-2-2-2 grouping, Paris landline `01 42 34 56 78`, international `+33 6 12 34 56 78`, etc. | `[phone]` |
+| `piiPatterns.phoneByLocale.de()` | German phone validator. Matches Berlin landline `030 12345678` 3+8 variable, mobile `+49 176 12345678`, international prefixes. | `[phone]` |
+| `piiPatterns.phoneByLocale.uk()` | UK phone validator (ISO `GB`). Matches mobile `07911 123456` 5+6, London landline `020 7946 0123`, international `+44 7911 123456`. | `[phone]` |
+| `piiPatterns.phoneByLocale.it()` | Italian phone validator. Matches mobile `320 1234567` 3+7, Rome landline `+39 06 12345678`, international prefixes. | `[phone]` |
+| `piiPatterns.phoneByLocale.es()` | Spanish phone validator. Matches mobile `612 34 56 78` 3+2+2+2, Madrid landline `+34 91 123 45 67`, international prefixes. | `[phone]` |
+| `piiPatterns.phoneByLocale.pt()` | Portuguese phone validator. Matches mobile `912 345 678` 3+3+3, Lisbon landline `+351 21 123 4567`, international prefixes. | `[phone]` |
+| `piiPatterns.phoneInternational()` | `+?CC-3-3-4` NANP-shape (retained v1.0.0 fallback for numbers outside the six EU locales above) | `[phone]` |
 | `piiPatterns.phoneDomestic()` | `3-3-4` NANP-shape fallback | `[phone]` |
 | `piiPatterns.dob()` | Numeric `DD.MM.YYYY` / `DD/MM/YYYY` / `DD-MM-YYYY` / `YYYY-MM-DD` + named-month EN/FR/DE/IT/ES/PT | `[dob]` |
 
-Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → intlPhone → domesticPhone → dob**. This order is mandatory:
+Note: unlike the other pattern factories (which return `RegExp`), the `phoneByLocale.*()` factories return a **validator function** `(candidate: string) => boolean` backed by `libphonenumber-js` directly. API-choice rationale is documented inline in `src/patterns.ts` (file-header JSDoc → "Factory API choice: validator over RegExp") and in `docs/Handover-2.md` § Factory API choice.
+
+Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → dob → localePhones (fr, de, gb, it, es, pt) → intlPhone → domesticPhone**. This order is mandatory:
 
 - Addresses run **before** postcodes so a full structured address like `12 rue de la Paix, 75001 Paris` consumes the street run first; the residual `75001 Paris` is then redacted by the postcode pass.
 - Addresses also run **before** phone so the leading house number is not eaten by the phone pattern.
-- Postcodes run **before** phone — 5-digit continental postcodes and UK/PT alphanumerics are disjoint from the NANP phone shape, but ordering is pinned for future-proofing.
-- DOB runs **last** — numeric `DD.MM.YYYY` sequences would be mis-matched as phone digit runs if DOB ran earlier.
+- Postcodes run **before** phone — 5-digit continental postcodes and UK/PT alphanumerics are disjoint from every phone candidate, but ordering is pinned for future-proofing.
+- **DOB runs before phones (reordered in v1.1 for R2)** — v1.0.0 placed DOB last because the NANP regex could not mis-match `DD.MM.YYYY` sequences, but `libphonenumber-js`'s broader candidate-finder does recognise date-like digit sequences (`23.05.1985`, `1985-05-23`) as valid phone numbers in DE + other locales. DOB's regex is precise enough (anchored `\b`, specific separator alternation) that it cannot mis-match NANP or EU phone shapes, so flipping the order is safe. See `src/sanitize-pii.ts` header docblock (i)-(iii) rationale.
+- **Locale-aware phones run before NANP fallback** — a FR number `06 12 34 56 78` must be consumed whole by the locale pass; the NANP regex could otherwise match a 3-3-4 substring and leave `06 ` dangling.
 
 Tests pin the ordering with adversarial fixtures (`src/__tests__/sanitize-pii.test.ts`, `src/__tests__/locale-patterns.test.ts`).
 
 ## Known Limitations (C2 per compliance review)
 
-v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/IT/ES/PT + UK). Residual gaps after v1.1 are documented below with narrowed scope.
+v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/IT/ES/PT + UK) and **R2** (EU-native mobile + landline phone formats via `libphonenumber-js`). Residual gaps after v1.1 are documented below with narrowed scope.
 
 | Ref | Gap | Severity | v1.1 status | Planned |
 |---|---|---|---|---|
 | R1 | ~~Non-English postal addresses pass through unredacted.~~ **Resolved in v1.1** for structured FR/DE/IT/ES/PT addresses (covering the common prefix-keyword and compound-suffix forms) and bare UK/FR/DE/IT/ES/PT postcodes. | High | **Resolved** | v1.1 (this release) |
 | R1-residual | Address name tokens with apostrophes (e.g. `O'Brien Road`), German multi-word prefix forms (`Unter den Linden 5`, `Am Markt 3`), non-EU locales (NL, BE, SE, …), all-caps headers (`BAKER STREET`), and lowercase UK postcodes in free text are NOT covered. | Medium | Not mitigated | Future — narrow pattern extensions per compliance re-review |
-| R2 | EU-native mobile phone formats (FR `06 12 34 56 78` 2-2-2-2-2 grouping, DE `030 12345678` 3+8 variable, UK `07700 900123` 5+6, IT / ES / PT CC-prefixed groupings) systematically under-match the NANP-shape regex. | High | Not mitigated | v1.2 — `libphonenumber-js` integration |
+| R2 | ~~EU-native mobile phone formats (FR `06 12 34 56 78`, DE `030 12345678`, UK `07911 123456`, IT / ES / PT CC-prefixed groupings) systematically under-match the NANP-shape regex.~~ **Resolved in v1.1** via `libphonenumber-js@1.12.41/min` — per-locale `phoneByLocale.{fr,de,uk,it,es,pt}()` validator factories + locale-aware pass in `sanitizePii`. NANP-shape `phoneInternational` / `phoneDomestic` fallbacks retained for backward-compat with v1.0.0 consumers. | High | **Resolved** | v1.1 (this release) |
+| R2-residual | Non-EU locales (US, CA, AU, IN, JP, …) still handled by the NANP-shape fallback only — recall degraded for non-NANP international numbers outside the six EU locales. Very short digit runs without phone formatting (bare `12345678` with no separators, no country code) are intentionally NOT redacted — libphonenumber-js metadata would accept them as valid DE short-codes but this over-redacts SKUs / order-IDs in CV free text. Guard rationale: `PHONE_FORMATTED_RE` heuristic in `sanitize-pii.ts`. | Low | Not mitigated | v1.2 — extend `phoneByLocale` to additional countries based on consumer demand |
 | R3 | Applicant's full name in CV header flows unredacted. Regex is an inappropriate tool (CVs are lists of proper nouns — company names, universities, referees). NER is the right tool. | Medium | Not mitigated | v1.2 — NER-based name redaction (Microsoft Presidio or equivalent) |
 | R5 | IDN email addresses with non-ASCII local or domain part (`françois@école.fr`, `user@münchen.de`) pass through unredacted. Punycode-encoded (`xn--…`) addresses DO match. | Low | Not mitigated | v1.2 — widen character classes / validated-email parser |
 | R10 | National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors. | Low | Not mitigated | v1.2 — national-ID pattern set |
 
-**Consuming apps SHOULD still add caller-level scrubbing for R2 phone coverage** (native EU mobile formats) until `libphonenumber-js` integration lands in v1.2. Address coverage is now locale-aware; R1 no longer requires caller-side address scrubbing for FR/DE/IT/ES/PT structured forms. For scoring, the existing `sanitizePii` on the chunker boundary (`cv-chunker.ts:186`, `cv-chunker.ts:203`) and post-LLM evidence-quote scrubbing (`llm-coverage.service.ts:178`) remain in place as defence-in-depth.
+Both **R1** (v1.1 #1) and **R2** (v1.1 #2) are now in-package. Consuming apps no longer need caller-level scrubbing for FR/DE/IT/ES/PT structured addresses, UK/FR/DE/IT/ES/PT postcodes, or any of the six supported phone locales. For scoring, the existing `sanitizePii` on the chunker boundary (`cv-chunker.ts:186`, `cv-chunker.ts:203`) and post-LLM evidence-quote scrubbing (`llm-coverage.service.ts:178`) remain in place as defence-in-depth.
 
-**Performance budget:** `sanitizePii` completes under 10ms on a ~10KB prompt containing mixed EU-style PII (verified by `src/__tests__/locale-patterns.test.ts` performance test — 10-run mean). Middleware overhead remains negligible at the single-call chokepoint even with 16 pattern passes per prompt.
+**Performance budget:** `sanitizePii` completes under 10ms on a ~10KB prompt containing mixed EU-style PII (verified by `src/__tests__/locale-patterns.test.ts` performance test — 10-run mean). The locale-aware phone pass adds six `findPhoneNumbersInText` calls per `sanitizePii` invocation; each is O(n) over the input and backed by `libphonenumber-js/min` metadata (~19KB gz). The performance assertion remains green at the v1.1 gate.
+
+**Bundle size impact (v1.1 R2):** `libphonenumber-js@1.12.41/min` adds ~89 KB uncompressed / ~21 KB gzipped to the runtime footprint (6.2 KB runtime JS + 82.5 KB metadata.min.json, gzipped to 1.6 KB + 19.1 KB). The `/min` bundle is selected over `/max` and `/mobile` because explicit default-country validation (as used here) does not require the full metadata table. Acceptable for a server-side middleware package; flagged for awareness on client-bundle use cases.
 
 ## Security Posture (S11)
 

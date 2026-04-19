@@ -1,0 +1,77 @@
+# Publish workflow — triggered on tag push v*.*.*.
+#
+# Flow:
+#   1. verify-tag — git verify-tag aborts if the tag isn't GPG-signed (S3).
+#   2. publish    — npm ci → build → test → redos:scan → npm publish
+#                   --provenance --access restricted to GitHub Packages,
+#                   then actions/attest-build-provenance@v1 attests the
+#                   dist/** artefacts to Sigstore Rekor (S4).
+#
+# Permissions are narrowed to the minimum required for OIDC-based
+# provenance publishing. All action SHAs pinned.
+
+name: Publish
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  attestations: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (full history for tag verification)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Verify tag GPG signature
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Verifying tag: $TAG"
+          git verify-tag "$TAG" || {
+            echo "::error::Tag $TAG is not GPG-signed by an authorised maintainer. Aborting publish."
+            exit 1
+          }
+          echo "Tag $TAG signature verified."
+
+  publish:
+    needs: verify-tag
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js (with GitHub Packages registry)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@kgn-git'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test
+      - name: ReDoS scan (last pre-publish gate)
+        run: npm run redos:scan
+      - name: Publish to GitHub Packages with provenance
+        run: npm publish --provenance --access restricted
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attest build provenance for dist artefacts
+        uses: actions/attest-build-provenance@db473fddc028af60658334401dc6fa3ffd8669fd # v2.3.0
+        with:
+          subject-path: 'dist/**/*.js'

@@ -1,0 +1,43 @@
+# Dependabot configuration (S7).
+#
+# Weekly updates for npm + GitHub Actions ecosystems. Auto-merge is
+# explicitly DISABLED — every bump requires a human maintainer approval
+# through the branch-protected PR flow. The 'hot-target' threat profile
+# of this package makes supply-chain compromise via a malicious dep bump
+# the top P2 concern (see security review §1).
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Europe/London
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    labels:
+      - dependencies
+      - security
+    reviewers:
+      - kgn-git/privacy-utils-maintainers
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Europe/London
+    labels:
+      - dependencies
+      - github-actions
+    reviewers:
+      - kgn-git/privacy-utils-maintainers

@@ -76,6 +76,16 @@ describe('emailPattern — IDN support (#3 / R5)', () => {
       'user@example.中国',
     ]);
   });
+
+  it('greedily matches Unicode-word TLD with no separator (over-redaction acceptable for privacy)', () => {
+    // The TLD quantifier {2,24} consumes trailing Unicode letters up to the ceiling.
+    // user@example.中国后文字 (5-char Unicode TLD-lookalike) is matched as a single
+    // email. Over-redaction of an email-shaped token is the correct privacy trade-off —
+    // the lookahead (?![\p{L}\p{N}-]) prevents EXTENSION into following chars, not
+    // truncation at semantic TLD boundaries.
+    const result = 'user@example.中国后文字'.match(emailPattern());
+    expect(result).toEqual(['user@example.中国后文字']);
+  });
 });
 
 describe('sanitizePii — IDN email redaction (#3 / R5)', () => {

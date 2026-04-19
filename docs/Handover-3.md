@@ -92,15 +92,19 @@ Conclusion: the perf flake is a pre-existing Windows/vitest cold-start character
 
 ---
 
-## Code review (pending dispatcher review — SD-002 amended)
+## Code Review
 
-_This section is left blank per SD-002 amendment 2026-04-15. The dispatcher (`/programme-manager` or `/project-manager` at top-level session scope) populates this section after running `Agent(subagent_type="feature-dev:code-reviewer", ...)` against the feature branch._
-
-- Verdict: pending dispatcher review
-- Critical findings: pending
-- Important findings: pending
-- Minor findings: pending
-- Fix commit(s): pending
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19)
+- **First-pass verdict:** Fix first — 1 Important finding (**IMP-1**)
+- **IMP-1 summary:** Handover §134 (old framing) claimed the trailing lookahead `(?![\p{L}\p{N}-])` "correctly rejects" `user@example.中国后文字` as a "too-long TLD". Factually wrong: the TLD quantifier `[\p{L}]{2,24}` greedily consumes the 5 trailing Unicode letters (within the 24-char ceiling), so the whole string matches as a single email. Functional outcome (over-redaction of an email-shaped Unicode token) is the correct privacy trade-off — only the description was misleading, and no test documented the greedy behaviour.
+- **Fix commits:** [SHA-FIX]
+  - Rewrote handover §134 to describe the actual greedy behaviour and the intentional privacy trade-off, explicitly noting the lookahead prevents extension into following chars but does not truncate at semantic TLD boundaries.
+  - Added a documenting test `greedily matches Unicode-word TLD with no separator (over-redaction acceptable for privacy)` to `src/__tests__/idn-email.test.ts`, co-located with the other IDN TLD tests in the first `describe` block.
+- **Critical findings:** none
+- **Important findings:** 1 (IMP-1, addressed above)
+- **Minor findings:** none
+- **Expected re-review verdict:** Ready to merge (trivial doc correction + one documenting test; no runtime/regex change).
+- **Test delta:** 178 → 179 passing (backward-compat preserved; greedy-consumption test now captures the actual design intent).
 
 ---
 
@@ -131,7 +135,7 @@ None observed. RED → GREEN commit sequence visible in history. No commits to `
 
 Focus areas the reviewer should pay attention to:
 
-1. **Unicode boundary semantics.** The trailing `\b` → `(?![\p{L}\p{N}-])` substitution is the most semantically-loaded change. Verify on adversarial inputs like `user@example.中国后文字` (Unicode TLD immediately followed by Unicode text without separator) — does the reviewer agree the lookahead correctly rejects this as a too-long TLD while still matching `user@example.中国 后文字` (space separator)? Test case to add if reviewer wants additional coverage.
+1. **Unicode boundary semantics (and the greedy-TLD trade-off).** The trailing `\b` → `(?![\p{L}\p{N}-])` substitution is the most semantically-loaded change. On an adversarial input like `user@example.中国后文字` (Unicode TLD immediately followed by further Unicode letters with no separator), the TLD quantifier `[\p{L}]{2,24}` **greedily consumes** all five trailing Unicode letters (`中国后文字` is within the 24-char ceiling), so the regex matches the entire string `user@example.中国后文字` as a single email token. The negative lookahead `(?![\p{L}\p{N}-])` only prevents **extension into further characters** past the quantifier's final position — it does not truncate at semantic TLD boundaries (the regex has no knowledge of which Unicode letter sequences form registered TLDs). **Functionally this is the correct privacy-side trade-off:** an email-shaped Unicode token is over-redacted rather than under-redacted. The separator case (`user@example.中国 后文字`) correctly terminates at the space — the lookahead fires on the whitespace and the match stops at `中国`, leaving `后文字` untouched. Both behaviours are documented by explicit tests in `idn-email.test.ts`.
 2. **Idempotency argument.** The `[email]` token contains no `@` so second-pass is a no-op. Verify this argument holds for all edge cases including `[email][email]` concatenation (adversarial — not produced by any natural input).
 3. **ReDoS posture with `u` flag.** `recheck`'s `check()` call in `scripts/redos-scan.mjs` passes `re.flags` so the `u` flag is propagated. Output confirms `emailPattern: safe`. Reviewer may want to verify that `recheck` actually honours `u` flag (it does per their docs, but worth a spot-check).
 4. **Punycode double-match risk.** If a consumer feeds text containing BOTH forms (`münchen.de` and `xn--mnchen-3ya.de`), both match independently as separate emails. This is correct behaviour — they're lexically distinct strings — but worth noting the regex does NOT attempt any unification. Consumer-side deduplication is not in scope.

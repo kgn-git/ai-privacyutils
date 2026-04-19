@@ -153,11 +153,30 @@ The publish workflow is pinned (by SHA) to `actions/attest-build-provenance@v2.3
 | `8f00868` | CRIT-1 | README § S4 + CONTRIBUTING § Releasing aligned to `actions/attest-build-provenance@v2.3.0`. README API reference updated for factory call syntax + "Why factories?" note. Pattern inventory table notes mixed-case coverage. |
 | (this commit) | Handover record | Populate `## Code Review` section with verdict + fix-commit SHA list + re-review pending marker. |
 
-**MIN-4 status:** not remediated this cycle — the empty `scripts/redos-debug.mjs` placeholder is still untracked in the working tree. `rm` was permission-denied inside the subagent (same state as the original /developer dispatch recorded in § Known Tech Debt). The file is excluded from publishing via the `files` field in `package.json` and is untracked in git — zero functional or supply-chain impact. Dispatcher or follow-up cleanup commit can delete it at top-level session scope.
+**MIN-4 status:** ✅ resolved at top-level 2026-04-19 — empty `scripts/redos-debug.mjs` placeholder deleted; git status clean.
 
-### Re-review
+### Re-review (2026-04-19)
 
-Pending — `/programme-manager` dispatches a second `feature-dev:code-reviewer` after this fix cycle lands.
+- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session scope)
+- Fix delta range: `0cc6826..b034d62` (5 fix commits) + `933e82b` CLAUDE.md factory-function docstring patch at top-level
+- Verdict: **Ready to merge**
+- Critical findings (re-review): 0
+- Important findings (re-review): 0
+- Minor findings (re-review): 1 (MIN-1 — all-caps terminator keywords like `BAKER STREET` not covered; pre-existing gap out-of-scope for CRIT-2; already classified under R1 in Known Limitations; candidate for v1.1 backlog issue if UK all-caps CV-header inputs are material)
+- Remediation verification per finding:
+  - CRIT-1 RESOLVED (95 confidence) — all `@v1` references replaced with `@v2.3.0` across README/CONTRIBUTING/Handover; zero residual `@v1` mentions in fix scope
+  - CRIT-2 RESOLVED (95 confidence) — `[A-Z][a-zA-Z]{0,15}` character class at `src/patterns.ts:91`; `McLane Drive` + `LA Cienega Boulevard` fixtures redact correctly; TDD RED→GREEN verifiable
+  - IMP-1 RESOLVED (97 confidence) — all 5 pattern exports are factory functions; `piiPatterns` object values invoke factories; 6 assertions pin factory freshness + distinct instance + no cross-instance `lastIndex` leak
+  - IMP-4 RESOLVED (97 confidence) — job-level `pull-requests: write` on `dependency-review` job only; least-privilege preserved across other jobs
+  - IMP-5 RESOLVED (97 confidence) — `redos:scan` script now `npm run build && node scripts/redos-scan.mjs`; acceptable idempotent double-build in CI
+  - IMP-6 RESOLVED (97 confidence) — `subject-path: 'dist/**'` attests `.d.ts` + `.d.ts.map` + `.js.map` alongside `.js`
+- ReDoS safety of widened `addressPattern` re-verified structurally: O(n) complexity preserved despite 52-char class widening; mandatory literal space between word groups prevents character-class overlap that would drive catastrophic backtracking; `recheck` v4.x "safe" verdict accepted
+- TDD / SI-001 compliance: PASS (fix-cycle RED `96568f5` precedes GREEN `4a6bfeb`)
+- Handover Code Review section formatting: PASS
+- S-items regression check: PASS (11 first-pass S-items structurally intact through fix cycle)
+- Diff scope cleanliness: PASS (fix commits touch only expected files; no unexpected drift)
+
+**Merge authorised by SD-002 amended process.** User authorisation still required for the merge button + downstream tag-push decisions.
 
 ---
 

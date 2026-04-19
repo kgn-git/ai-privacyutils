@@ -54,12 +54,20 @@ const cleaned = sanitizePii(rawCvText);
 
 ### Programmatic pattern access
 
-```ts
-import { piiPatterns } from '@kgn-git/privacy-utils';
+Pattern exports are **factory functions** — call with `()` to get a fresh `/g` RegExp on every call:
 
-// piiPatterns.email, piiPatterns.address, piiPatterns.phoneInternational,
-// piiPatterns.phoneDomestic, piiPatterns.dob
+```ts
+import { piiPatterns, emailPattern } from '@kgn-git/privacy-utils';
+
+const re = piiPatterns.email();       // fresh RegExp, lastIndex === 0
+re.test('jane@example.com');          // true
+
+// Or call the individual factory export directly:
+const re2 = emailPattern();
+re2.exec('mail jane@example.com');
 ```
+
+**Why factories?** `/g`-flagged RegExps carry a stateful `lastIndex`. If an exported pattern were a module-level singleton, consecutive `.test()` calls on the same instance would alternate true/false — a classic footgun when the same regex is imported and used by more than one call-site concurrently. Factories guarantee a fresh instance per call, so callers never inherit a stale `lastIndex` from another consumer. (`sanitizePii` itself is unaffected — `String.prototype.replace` resets `lastIndex` internally — but this shape protects external callers using `.test()` / `.exec()`.)
 
 ## GDPR Rationale
 
@@ -73,13 +81,13 @@ This package does not create a new Art. 13 disclosure obligation. Platform-side 
 
 ## Pattern inventory
 
-| Export | Matches | Replacement token |
+| Export (call with `()`) | Matches | Replacement token |
 |---|---|---|
-| `piiPatterns.email` | `local@domain.tld` (RFC 5321-bounded, ASCII only) | `[email]` |
-| `piiPatterns.address` | US/UK number-first street address with English terminator (Street / Avenue / …) and optional direction suffix | `[address]` |
-| `piiPatterns.phoneInternational` | `+?CC-3-3-4` NANP-shape | `[phone]` |
-| `piiPatterns.phoneDomestic` | `3-3-4` NANP-shape fallback | `[phone]` |
-| `piiPatterns.dob` | Numeric `DD.MM.YYYY` / `DD/MM/YYYY` / `DD-MM-YYYY` / `YYYY-MM-DD` + named-month EN/FR/DE/IT/ES/PT | `[dob]` |
+| `piiPatterns.email()` | `local@domain.tld` (RFC 5321-bounded, ASCII only) | `[email]` |
+| `piiPatterns.address()` | US/UK number-first street address with English terminator (Street / Avenue / …) and optional direction suffix; accepts mixed-case street names (e.g. `McLane Drive`, `LA Cienega Boulevard`) | `[address]` |
+| `piiPatterns.phoneInternational()` | `+?CC-3-3-4` NANP-shape | `[phone]` |
+| `piiPatterns.phoneDomestic()` | `3-3-4` NANP-shape fallback | `[phone]` |
+| `piiPatterns.dob()` | Numeric `DD.MM.YYYY` / `DD/MM/YYYY` / `DD-MM-YYYY` / `YYYY-MM-DD` + named-month EN/FR/DE/IT/ES/PT | `[dob]` |
 
 Order of application in `sanitizePii`: **email → address → intlPhone → domesticPhone → dob**. This order is mandatory — swapping phone before address causes the phone pattern to eat the house number in a street address; swapping dob before phone causes numeric `DD.MM.YYYY` sequences to be mis-matched as phone digit runs. Tests pin the ordering with adversarial fixtures.
 
@@ -104,7 +112,7 @@ This package is a canonical compliance control on the LLM prompt edge. A silent 
 - **S1 — `main` branch protection.** Required reviews ≥ 1; dismiss stale approvals on new commits; required status checks (lint, typecheck, test, redos-scan, audit, dependency-review); signed commits required; linear history; block force push. CODEOWNERS gates `.github/`, `package.json`, `package-lock.json`, `src/patterns.ts`, `src/pii-middleware.ts`.
 - **S2 — tag ruleset.** `v*.*.*` tag pattern: restrict deletions, restrict updates (immutable), maintainers only.
 - **S3 — GPG-signed tags.** v1.0.0 and every release tag is an annotated `git tag -s` signed with a dedicated Ed25519 hardware-token key (YubiKey 5 series) registered under the release-maintainer GitHub account. Key fingerprint published in `docs/SIGNING-TAGS.md`.
-- **S4 — npm publish with provenance.** `.github/workflows/publish.yml` uses `npm publish --provenance --access restricted` with `id-token: write` permission and `actions/attest-build-provenance@v1`; all action SHAs pinned (not floating tags). Attestation published to Sigstore Rekor transparency log — consumers can verify via `npm audit signatures`.
+- **S4 — npm publish with provenance.** `.github/workflows/publish.yml` uses `npm publish --provenance --access restricted` with `id-token: write` permission and `actions/attest-build-provenance@v2.3.0`; all action SHAs pinned (not floating tags). Attestation published to Sigstore Rekor transparency log — consumers can verify via `npm audit signatures`. Subject-path is `dist/**` so the attestation covers `.d.ts`, `.d.ts.map`, and `.js.map` alongside runtime `.js`.
 - **S5 — ReDoS scanner in CI.** `recheck` v4.x (NOT the unmaintained `safe-regex`) runs programmatically over `src/patterns.ts` via `scripts/redos-scan.mjs` as a required CI check. `eslint-plugin-redos@^4` also runs via `npm run lint`.
 - **S6 — dependency-review-action@v4.** Required CI check on every PR; fails on high/critical CVE or GPL-family licence.
 - **S7 — Dependabot.** Weekly npm + github-actions updates; no auto-merge (every bump goes through branch-protected PR).
@@ -139,7 +147,7 @@ Pure, one-way redaction. Idempotent. Empty input returns empty string. Non-PII i
 
 ### `piiPatterns`
 
-Record of named `RegExp` values: `email`, `address`, `phoneInternational`, `phoneDomestic`, `dob`. Each is a global regex (`/g` flag). Individual patterns also exported as `emailPattern`, `addressPattern`, `phoneInternationalPattern`, `phoneDomesticPattern`, `dobPattern`.
+Record of named **factory functions**: `email`, `address`, `phoneInternational`, `phoneDomestic`, `dob`. Calling a factory (`piiPatterns.email()`) returns a fresh `/g`-flagged `RegExp`. Individual factories also exported as `emailPattern`, `addressPattern`, `phoneInternationalPattern`, `phoneDomesticPattern`, `dobPattern`. See the "Why factories?" note above for the stateful-`lastIndex` rationale.
 
 ### `piiMiddleware: LanguageModelV1Middleware`
 

@@ -72,7 +72,7 @@ Tags are cut from `main` by a maintainer:
    - verifies the tag signature (`git verify-tag` CI step);
    - runs the full test + lint + redos-scan suite;
    - `npm publish --provenance --access restricted` to `npm.pkg.github.com`;
-   - `actions/attest-build-provenance@v1` attests the `dist/**` artefacts to Sigstore Rekor.
+   - `actions/attest-build-provenance@v2.3.0` attests the `dist/**` artefacts to Sigstore Rekor.
 
 Maintainer GPG key management and the hardware-token setup guide live in `docs/SIGNING-TAGS.md`.
 

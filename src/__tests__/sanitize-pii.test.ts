@@ -281,13 +281,16 @@ describe('sanitizePii — cross-pattern integration', () => {
     expect(twice).toBe(once);
   });
 
-  it('documents the known-gap for native EU phone formats (R2)', () => {
-    // This test asserts the KNOWN GAP — it pins behaviour so the gap
-    // cannot silently close without a version bump. When v1.1 lands
-    // libphonenumber-js, this test should flip and the assertion
-    // become `expect(out).toContain('[phone]')`.
+  it('redacts native EU phone formats — R2 resolved in v1.1', () => {
+    // v1.0.0 flagged this input as a known gap (R2). v1.1 integrates
+    // libphonenumber-js per `piiPatterns.phoneByLocale` + sanitizePii's
+    // locale-aware pass, so `+33 6 12 34 56 78` is now redacted
+    // byte-equivalent to NANP-shape numbers. The v1.0.0 pinned behaviour
+    // (assertion of passthrough) has flipped accordingly.
     const input = 'French mobile: +33 6 12 34 56 78 today.';
-    expect(sanitizePii(input)).toBe(input);
+    const out = sanitizePii(input);
+    expect(out).toContain('[phone]');
+    expect(out).not.toContain('+33');
   });
 
   it('returns empty string for empty input', () => {

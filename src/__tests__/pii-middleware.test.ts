@@ -149,6 +149,122 @@ describe('piiMiddleware.transformParams — type: stream', () => {
   });
 });
 
+describe('piiMiddleware.transformParams — locale-aware end-to-end (R1 / #1)', () => {
+  // Integration coverage: verifies that the locale-aware sanitisation
+  // added in v1.1 (patterns.ts) flows through the middleware boundary.
+  // RED-then-GREEN was already satisfied at the service-layer for the
+  // locale patterns (commits a8528b3 → f552d02); these cases are
+  // integration tests over already-green implementation and are
+  // additive rather than gating per SI-001.
+
+  it('redacts a full French CV header through the middleware', async () => {
+    const params = {
+      prompt:
+        'Jean Dupont, 12 rue de la Paix, 75001 Paris, jean@example.fr.',
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    expect(out.prompt).toContain('[address]');
+    expect(out.prompt).toContain('[postcode]');
+    expect(out.prompt).toContain('[email]');
+  });
+
+  it('redacts a full German CV header through the middleware', async () => {
+    const params = {
+      prompt:
+        'Hans Müller, Hauptstraße 23, 80331 München, hans@example.de.',
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    expect(out.prompt).toContain('[address]');
+    expect(out.prompt).toContain('[postcode]');
+    expect(out.prompt).toContain('[email]');
+  });
+
+  it('redacts a full Italian CV header through the middleware', async () => {
+    const params = {
+      prompt: 'Giulia Rossi, Via Roma 15, 00100 Roma, giulia@example.it.',
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    expect(out.prompt).toContain('[address]');
+    expect(out.prompt).toContain('[postcode]');
+    expect(out.prompt).toContain('[email]');
+  });
+
+  it('redacts a full Spanish CV header through the middleware', async () => {
+    const params = {
+      prompt:
+        'Carlos García, Calle Mayor 10, 28013 Madrid, carlos@example.es.',
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    expect(out.prompt).toContain('[address]');
+    expect(out.prompt).toContain('[postcode]');
+    expect(out.prompt).toContain('[email]');
+  });
+
+  it('redacts a full Portuguese CV header through the middleware', async () => {
+    const params = {
+      prompt:
+        'Ana Silva, Rua das Flores 45, 1200-195 Lisboa, ana@example.pt.',
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    expect(out.prompt).toContain('[address]');
+    expect(out.prompt).toContain('[postcode]');
+    expect(out.prompt).toContain('[email]');
+  });
+
+  it('redacts a full UK CV header (alphanumeric postcode) through the middleware', async () => {
+    const params = {
+      prompt:
+        'John Smith, 10 Downing Street, SW1A 2AA, john@example.co.uk.',
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    expect(out.prompt).toContain('[address]');
+    expect(out.prompt).toContain('[postcode]');
+    expect(out.prompt).toContain('[email]');
+  });
+
+  it('redacts locale addresses inside array content parts (provider-layer shape)', async () => {
+    const params = {
+      prompt: [
+        {
+          role: 'user',
+          content: [
+            textPart('Indirizzo: Via Roma 15.'),
+            textPart('CAP: 00100 Roma.'),
+          ],
+        },
+      ],
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    const prompt = out.prompt as Array<{
+      role: string;
+      content: Array<{ type: string; text: string }>;
+    }>;
+    expect(prompt[0].content[0].text).toBe('Indirizzo: [address].');
+    expect(prompt[0].content[1].text).toBe('CAP: [postcode].');
+  });
+});
+
 describe('piiMiddleware.transformParams — non-mutation of input', () => {
   it('does not mutate the caller-provided params object', async () => {
     const params = {

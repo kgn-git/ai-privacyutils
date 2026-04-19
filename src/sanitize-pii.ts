@@ -20,6 +20,10 @@ import {
   dobPattern,
 } from './patterns.js';
 import { tokensFor, type TokenFormat } from './token-format.js';
+import {
+  DEFAULT_MAX_INPUT_LENGTH,
+  PiiInputTooLargeError,
+} from './limits.js';
 
 /**
  * Locale ordering for the locale-aware phone pass. Order is arbitrary
@@ -178,6 +182,18 @@ export interface SanitizePiiOptions {
    *     `<<REDACTED_DOB>>`. Pattern-disjoint, low-collision variant.
    */
   tokenFormat?: TokenFormat;
+  /**
+   * Runtime input-length cap in JS string code units (v1.1 — issue #10 /
+   * security review R7). If `text.length` exceeds this value, `sanitizePii`
+   * throws `PiiInputTooLargeError` BEFORE running any regex — an O(1)
+   * belt-and-braces ReDoS defence that complements the static `recheck` /
+   * `eslint-plugin-redos` CI gate.
+   *
+   * Default: `DEFAULT_MAX_INPUT_LENGTH` (500_000 code units). See ADR 002
+   * (`docs/adr/002-input-length-cap.md`) for design rationale including
+   * the throw-vs-truncate decision and the per-call scope semantics.
+   */
+  maxInputLength?: number;
 }
 
 /**
@@ -259,6 +275,16 @@ export function sanitizePii(
   options?: SanitizePiiOptions,
 ): string {
   if (text === '' || text == null) return text ?? '';
+
+  // O(1) input-length cap (v1.1 — issue #10). Runs AFTER the empty-string
+  // short-circuit (preserves v1.0.0 guard: empty in → empty out, even at
+  // `maxInputLength: 0`) but BEFORE any regex. This is the secondary ReDoS
+  // defence alongside the static `recheck` lint (#4 / S5). See
+  // `./limits.ts` for the ADR.
+  const maxInputLength = options?.maxInputLength ?? DEFAULT_MAX_INPUT_LENGTH;
+  if (text.length > maxInputLength) {
+    throw new PiiInputTooLargeError(text.length, maxInputLength);
+  }
 
   const tokens = tokensFor(options?.tokenFormat);
   let out = text;

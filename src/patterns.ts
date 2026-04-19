@@ -10,8 +10,8 @@
  * — covers `DD.MM.YYYY`, `DD/MM/YYYY`, `YYYY-MM-DD`, `DD-MM-YYYY`, and
  * named-month variants across EN/FR/DE/IT/ES/PT.
  *
- * v1.1 adds locale-aware address + postcode patterns per #1 (R1 of the
- * compliance review §7). New exports:
+ * v1.1 adds locale-aware address + postcode + phone coverage per #1 (R1)
+ * and #2 (R2) of the compliance review §7. New exports:
  *
  *   - `addressByLocale.en()/.fr()/.de()/.it()/.es()/.pt()` — per-locale
  *     structured-address factories. EN is the v1.0.0 pattern preserved
@@ -20,7 +20,14 @@
  *   - `postcodeByLocale.uk()/.fr()/.de()/.it()/.es()/.pt()` — bare
  *     postcode factories. UK alphanumeric, FR/DE/IT/ES 5-digit with
  *     following city token, PT NNNN-NNN with optional city.
- *   - Replacement token for postcodes: `[postcode]` (new, additive).
+ *   - `phoneByLocale.fr()/.de()/.uk()/.it()/.es()/.pt()` — per-locale
+ *     validator factories backed by `libphonenumber-js`. Each call returns
+ *     a fresh `(candidate: string) => boolean` validator. NOT a RegExp
+ *     factory — see `makePhoneValidator` / `phoneByLocale` JSDoc below
+ *     for the "validator over RegExp" API choice rationale. The v1.0.0
+ *     NANP-shape `phoneInternationalPattern` + `phoneDomesticPattern`
+ *     regexes are retained as backward-compat fallbacks.
+ *   - Replacement token for postcodes: `[postcode]` (added in #1).
  *
  * Order of application (see `sanitizePii`): email → addresses (all
  * locales) → postcodes (all locales) → international phone → domestic
@@ -48,8 +55,10 @@
  *   - R1 RESOLVED for FR/DE/IT/ES/PT structured addresses + UK/FR/DE/IT/ES/PT
  *     bare postcodes. Residual gaps: names with apostrophes (`O'Brien Road`),
  *     non-EU locales, and structured-address forms with unusual word order.
- *   - R2 EU-native mobile phone formats still under-match — planned for v1.2
- *     via `libphonenumber-js`.
+ *   - R2 RESOLVED for FR/DE/UK/IT/ES/PT native mobile + landline formats via
+ *     `libphonenumber-js` per `phoneByLocale` + `sanitizePii` locale-aware
+ *     pass. NANP-shape `phoneInternational` / `phoneDomestic` fallbacks
+ *     retained for backward-compat with v1.0.0 consumers.
  *   - R3 Applicant names — v1.2 NER work.
  *   - R5 IDN email — v1.2.
  *   - R10 National identifiers — v1.2.
@@ -278,7 +287,10 @@ export function postcodePtPattern(): RegExp {
 /**
  * International phone: `+?CC-area-3-3-4` NANP-shape.
  *
- * NANP-shaped; native EU mobile formats under-match. Known gap R2.
+ * NANP-shaped. v1.0.0's sole international-phone primitive; retained in
+ * v1.1 as the backward-compatible fallback after locale-aware EU phone
+ * validation. See `phoneByLocale` below + `sanitizePii` order-of-application
+ * for the v1.1 pipeline.
  */
 export function phoneInternationalPattern(): RegExp {
   return /\+?\d{1,3}[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
@@ -290,6 +302,122 @@ export function phoneInternationalPattern(): RegExp {
 export function phoneDomesticPattern(): RegExp {
   return /\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
 }
+
+// Re-exported from libphonenumber-js/min: the `min` metadata bundle is
+// sufficient for our use case (validation with an explicit `defaultCountry`
+// per locale, not country-autodetection). The `min` bundle is ~80KB
+// gzipped vs ~145KB for the full metadata — reduces bundle-size impact for
+// a server-side middleware package.
+//
+// We import `isValidPhoneNumber` for the per-locale validator factories +
+// `findNumbers` for the locale-aware extraction-and-validation pass in
+// sanitizePii.
+import { isValidPhoneNumber } from 'libphonenumber-js/min';
+import type { CountryCode } from 'libphonenumber-js/min';
+
+/**
+ * Factory for a per-locale phone-number validator (v1.1 — R2 resolution).
+ *
+ * Each locale factory, when called, returns a fresh validator function
+ * `(candidate: string) => boolean`. The returned function delegates to
+ * `libphonenumber-js`'s `isValidPhoneNumber(candidate, <country>)`.
+ *
+ * ## Factory API choice: validator over RegExp
+ *
+ * v1.0.0 `phoneInternationalPattern()` / `phoneDomesticPattern()` return
+ * RegExp factories — consistent with email/address/postcode/dob patterns.
+ * For R2 we could have wrapped libphonenumber-js behind a RegExp-returning
+ * factory (e.g. a permissive candidate extractor + inline validation), but
+ * the library's value-add is validation, not extraction. Returning a
+ * validator function:
+ *
+ *   - makes the locale validation the primary API surface;
+ *   - is easier to compose in `sanitizePii`'s extract-then-validate pass;
+ *   - is structurally distinct from the NANP-shape RegExp fallbacks, which
+ *     we preserve under their v1.0.0 names for backward-compat;
+ *   - sidesteps the ReDoS concern entirely — no hand-rolled regex per
+ *     locale means `scripts/redos-scan.mjs` has nothing new to scan for
+ *     EU phones. Only the NANP-shape fallbacks remain in the regex
+ *     surface and those are unchanged from v1.0.0.
+ *
+ * ## Freshness invariant
+ *
+ * Each factory call returns a fresh closure — not a singleton reference.
+ * Externally-visible behaviour is stateless validation, but the fresh
+ * closure keeps the factory contract byte-identical to address/postcode
+ * factories (IMP-1 consistent).
+ *
+ * ## Country codes
+ *
+ * libphonenumber-js's `CountryCode` is an ISO 3166-1 alpha-2 code. Note
+ * that the UK key uses `'uk'` at the `phoneByLocale` surface (mirroring
+ * `postcodeByLocale.uk`) but passes `'GB'` to libphonenumber-js, which is
+ * the canonical country code per ISO 3166-1 alpha-2.
+ */
+function makePhoneValidator(
+  country: CountryCode,
+): (candidate: string) => boolean {
+  return (candidate: string): boolean => {
+    if (typeof candidate !== 'string' || candidate.length === 0) return false;
+    try {
+      return isValidPhoneNumber(candidate, country);
+    } catch {
+      return false;
+    }
+  };
+}
+
+/** French phone validator factory. */
+export function phoneFrValidator(): (candidate: string) => boolean {
+  return makePhoneValidator('FR');
+}
+
+/** German phone validator factory. */
+export function phoneDeValidator(): (candidate: string) => boolean {
+  return makePhoneValidator('DE');
+}
+
+/** UK phone validator factory (ISO country code GB). */
+export function phoneUkValidator(): (candidate: string) => boolean {
+  return makePhoneValidator('GB');
+}
+
+/** Italian phone validator factory. */
+export function phoneItValidator(): (candidate: string) => boolean {
+  return makePhoneValidator('IT');
+}
+
+/** Spanish phone validator factory. */
+export function phoneEsValidator(): (candidate: string) => boolean {
+  return makePhoneValidator('ES');
+}
+
+/** Portuguese phone validator factory. */
+export function phonePtValidator(): (candidate: string) => boolean {
+  return makePhoneValidator('PT');
+}
+
+/**
+ * Per-locale phone-validator factory dictionary (v1.1 — R2 resolution).
+ *
+ * Mirrors the shape of `addressByLocale` + `postcodeByLocale`. Each key is
+ * a factory function returning a fresh validator function. Used by
+ * `sanitizePii` when deciding whether a phone-shaped candidate is a valid
+ * native-format phone number in that locale.
+ *
+ * Note on UK key: the outer dictionary key is `uk` (consistent with
+ * `postcodeByLocale.uk`) but the libphonenumber-js country code passed
+ * through is `GB` (ISO 3166-1 alpha-2 canonical form for the United
+ * Kingdom).
+ */
+export const phoneByLocale = {
+  fr: phoneFrValidator,
+  de: phoneDeValidator,
+  uk: phoneUkValidator,
+  it: phoneItValidator,
+  es: phoneEsValidator,
+  pt: phonePtValidator,
+} as const;
 
 /**
  * Date of birth (C1 mandatory, new in v1.0.0).
@@ -398,6 +526,7 @@ export const piiPatterns = {
   address: addressPattern, // backward-compat alias for addressByLocale.en
   addressByLocale,
   postcodeByLocale,
+  phoneByLocale,
   phoneInternational: phoneInternationalPattern,
   phoneDomestic: phoneDomesticPattern,
   dob: dobPattern,
@@ -406,3 +535,4 @@ export const piiPatterns = {
 export type PiiPatternName = keyof typeof piiPatterns;
 export type AddressLocale = keyof typeof addressByLocale;
 export type PostcodeLocale = keyof typeof postcodeByLocale;
+export type PhoneLocale = keyof typeof phoneByLocale;

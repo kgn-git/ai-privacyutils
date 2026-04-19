@@ -63,15 +63,25 @@ The cap is wired on both the pure function (`sanitizePii(text, { maxInputLength?
 
 ---
 
-## Code Review (left blank by `/developer` per SD-002 amendment 2026-04-15)
+## Code Review
 
-The dispatcher (programme-manager or project-manager at top-level session scope) populates this section after running `Agent(subagent_type="feature-dev:code-reviewer", ...)` against the feature branch.
-
-- Verdict: pending dispatcher review
-- Critical findings: pending
-- Important findings: pending
-- Minor findings: pending
-- Fix commit(s): pending
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session)
+- **Base SHA:** `d99ee67592ae1b545a9cef89b7118e9ab9e31850`
+- **Head SHA:** `ca4694e` (at dispatch time)
+- **Verdict:** Ready to merge
+- **Critical findings:** 0
+- **Important findings:** 0
+- **Minor findings:** 1 (confidence 30 — not worth blocking; not fixed)
+- **Minor-1:** Internal `PartOptions` type in `src/pii-middleware.ts:15` uses `tokenFormat: TokenFormat | undefined` + `maxInputLength: number | undefined` rather than the conventional `?: T` optional syntax. Intentional per developer — struct is always constructed with all fields present (line 184). No functional consequence; stylistic-only observation.
+- **All 10 focus areas: PASS.** Highlights:
+  - O(1) check at `src/sanitize-pii.ts:284-287` — runs after empty-string short-circuit, before `tokensFor()`, before any `.replace()`, before `findPhoneNumbersInText`. No regex runs before the cap check.
+  - `PiiInputTooLargeError` correctly extends Error with `Object.setPrototypeOf` prototype-restoration + `this.name` assignment + typed `public readonly` props. Both `instanceof Error` and `instanceof PiiInputTooLargeError` tested.
+  - `DEFAULT_MAX_INPUT_LENGTH = 500_000` is the single source of truth — no magic-number duplication anywhere.
+  - Middleware propagation clean: `PartOptions { tokenFormat, maxInputLength }` threaded through `transformParams → redactPrompt → redactMessage → redactPart → sanitizePii` on every content shape (string prompt, string content, array content, text parts, reasoning parts).
+  - Throw propagation clean: `transformParams` is `async`, returns rejected promise on throw; no `try/catch` wrapper in middleware to swallow or re-wrap. The `try/catch` at `sanitize-pii.ts:120-137` is inside `redactLocalePhones` which runs AFTER the cap check, so it cannot intercept `PiiInputTooLargeError`.
+  - No baseline test file modified (verified by grep — `maxInputLength` / `DEFAULT_MAX_INPUT_LENGTH` / `500_000` appear nowhere in the 6 baseline test files).
+  - No silent truncation path — no `text.slice(0, cap)` or defensive try/catch-to-truncate fallback anywhere.
+  - ADR 002 production-quality: context + 5 decisions with rationale + consequences + explicit rejected alternatives (silent truncation, configurable onOverflow, middleware-only scope, byte-length, grapheme-length).
 
 ---
 

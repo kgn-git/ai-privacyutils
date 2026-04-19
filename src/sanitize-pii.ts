@@ -19,6 +19,7 @@ import {
   phoneDomesticPattern,
   dobPattern,
 } from './patterns.js';
+import { tokensFor, type TokenFormat } from './token-format.js';
 
 /**
  * Locale ordering for the locale-aware phone pass. Order is arbitrary
@@ -105,9 +106,10 @@ const PHONE_FORMATTED_RE = /^\+|[\s.-]/;
  *
  * Matches are merged into a single sorted list of disjoint `[start, end)`
  * ranges, then replaced in reverse position order so earlier indices stay
- * valid during splice.
+ * valid during splice. `phoneToken` is the concrete replacement string
+ * for the active token format (v1.1 — issue #9).
  */
-function redactLocalePhones(text: string): string {
+function redactLocalePhones(text: string, phoneToken: string): string {
   const ranges: Array<{ start: number; end: number }> = [];
 
   for (const country of PHONE_LOCALE_COUNTRIES) {
@@ -151,18 +153,41 @@ function redactLocalePhones(text: string): string {
   let out = text;
   for (let i = merged.length - 1; i >= 0; i -= 1) {
     const { start, end } = merged[i]!;
-    out = out.slice(0, start) + '[phone]' + out.slice(end);
+    out = out.slice(0, start) + phoneToken + out.slice(end);
   }
   return out;
+}
+
+/**
+ * Optional configuration for `sanitizePii`.
+ *
+ * Backward-compat contract: calling `sanitizePii(text)` with no options
+ * argument (or with an empty options object / `tokenFormat: 'readable'`)
+ * produces v1.0.0 byte-identical output. Only `tokenFormat: 'sentinel'`
+ * diverges from v1.0.0 behaviour — see `./token-format.ts` for the full
+ * ADR + idempotency invariant.
+ */
+export interface SanitizePiiOptions {
+  /**
+   * Replacement-token format (v1.1 — issue #9 / compliance §R8).
+   *
+   *   - `'readable'` (default): `[email]`, `[phone]`, `[address]`,
+   *     `[postcode]`, `[dob]`. v1.0.0 byte-identical.
+   *   - `'sentinel'`: `<<REDACTED_EMAIL>>`, `<<REDACTED_PHONE>>`,
+   *     `<<REDACTED_ADDRESS>>`, `<<REDACTED_POSTCODE>>`,
+   *     `<<REDACTED_DOB>>`. Pattern-disjoint, low-collision variant.
+   */
+  tokenFormat?: TokenFormat;
 }
 
 /**
  * Sanitise PII from arbitrary text.
  *
  * Port of `jobflow-scoring/src/lib/services/cv-chunker.ts:72-91`
- * extended with a DOB pattern per compliance-review condition C1 (v1.0.0)
- * and locale-aware address + postcode sets per #1 (v1.1) + locale-aware
- * phone validation per #2 (v1.1 — R2 resolution via libphonenumber-js).
+ * extended with a DOB pattern per compliance-review condition C1 (v1.0.0),
+ * locale-aware address + postcode sets per #1 (v1.1), locale-aware
+ * phone validation per #2 (v1.1 — R2 resolution via libphonenumber-js),
+ * and an opt-in `tokenFormat` option per #9 (v1.1 — R8 resolution).
  *
  * Order of application matters for idempotency and correctness (see the
  * inline justification in `src/__tests__/sanitize-pii.test.ts`,
@@ -203,30 +228,39 @@ function redactLocalePhones(text: string): string {
  *                  uses spaces, not DOB separators);
  *              (ii) named-month DOBs (`12 mars 1985`) are already
  *                   non-overlapping with any phone shape;
- *              (iii) idempotency is preserved — the `[dob]` token has no
- *                    digit runs.
+ *              (iii) idempotency is preserved — the `[dob]` / `<<REDACTED_DOB>>`
+ *                    token has no digit runs.
  *   5. locale-aware phones (FR/DE/GB/IT/ES/PT via libphonenumber-js) —
  *              new in v1.1 (R2). Runs BEFORE the NANP-shape fallback to
  *              avoid double-redaction: a FR number like `06 12 34 56 78`
  *              contains a 3-3-4 substring that the NANP regex could
  *              otherwise match and leave `06 ` dangling. The locale pass
  *              consumes the full validated number as a single `[phone]`
- *              token; the NANP pass is then a no-op on the residual.
+ *              (or `<<REDACTED_PHONE>>`) token; the NANP pass is then a
+ *              no-op on the residual.
  *   6. international phone (NANP-shape fallback) — runs before domestic
  *              phone so `+44` is not dangled after the domestic pattern
  *              eats the last ten digits.
  *   7. domestic phone — NANP-shape fallback for v1.0.0 backward-compat.
  *
- * The returned string carries the token placeholders `[email]`,
- * `[address]`, `[postcode]` (v1.1), `[phone]`, `[dob]`. Locale-aware
- * phones and NANP-shape phones share the same `[phone]` token for
- * downstream homogeneity. See compliance review §R8 — token collision
- * with user-written text containing the literal tokens is possible but
- * low-risk (one-way redaction; downstream LLM treats the token as opaque).
+ * The returned string carries token placeholders per the active
+ * `tokenFormat` (default `'readable'` — `[email]`, `[address]`,
+ * `[postcode]`, `[phone]`, `[dob]`). When `tokenFormat: 'sentinel'` is
+ * passed the tokens become `<<REDACTED_EMAIL>>`, `<<REDACTED_ADDRESS>>`,
+ * `<<REDACTED_POSTCODE>>`, `<<REDACTED_PHONE>>`, `<<REDACTED_DOB>>` —
+ * pattern-disjoint with every v1.x redaction pattern so idempotency
+ * holds in both formats (and cross-format: sentinel output sanitised
+ * again in readable mode is also a no-op).
+ *
+ * See `./token-format.ts` for the full ADR + idempotency invariant.
  */
-export function sanitizePii(text: string): string {
+export function sanitizePii(
+  text: string,
+  options?: SanitizePiiOptions,
+): string {
   if (text === '' || text == null) return text ?? '';
 
+  const tokens = tokensFor(options?.tokenFormat);
   let out = text;
 
   // Each regex pattern is a factory (IMP-1): call with `()` to get a fresh
@@ -236,25 +270,25 @@ export function sanitizePii(text: string): string {
   // aligned with the exported API.
 
   // 1. Email first — '@' runs are unambiguous.
-  out = out.replace(emailPattern(), '[email]');
+  out = out.replace(emailPattern(), tokens.email);
 
   // 2. Addresses — EN first (byte-equivalent v1.0.0 behaviour), then
   //    locale-specific forms. Disjoint prefixes/suffixes/keywords in
   //    practice, so ordering among locales does not cascade.
-  out = out.replace(addressPattern(), '[address]');
-  out = out.replace(addressFrPattern(), '[address]');
-  out = out.replace(addressDePattern(), '[address]');
-  out = out.replace(addressItPattern(), '[address]');
-  out = out.replace(addressEsPattern(), '[address]');
-  out = out.replace(addressPtPattern(), '[address]');
+  out = out.replace(addressPattern(), tokens.address);
+  out = out.replace(addressFrPattern(), tokens.address);
+  out = out.replace(addressDePattern(), tokens.address);
+  out = out.replace(addressItPattern(), tokens.address);
+  out = out.replace(addressEsPattern(), tokens.address);
+  out = out.replace(addressPtPattern(), tokens.address);
 
   // 3. Postcodes — consume residual bare "NNNNN City" / UK / PT forms.
-  out = out.replace(postcodeUkPattern(), '[postcode]');
-  out = out.replace(postcodeFrPattern(), '[postcode]');
-  out = out.replace(postcodeDePattern(), '[postcode]');
-  out = out.replace(postcodeItPattern(), '[postcode]');
-  out = out.replace(postcodeEsPattern(), '[postcode]');
-  out = out.replace(postcodePtPattern(), '[postcode]');
+  out = out.replace(postcodeUkPattern(), tokens.postcode);
+  out = out.replace(postcodeFrPattern(), tokens.postcode);
+  out = out.replace(postcodeDePattern(), tokens.postcode);
+  out = out.replace(postcodeItPattern(), tokens.postcode);
+  out = out.replace(postcodeEsPattern(), tokens.postcode);
+  out = out.replace(postcodePtPattern(), tokens.postcode);
 
   // 4. DOB BEFORE phones (v1.1 reorder): libphonenumber-js's
   //    findPhoneNumbersInText is lenient enough to match date-like digit
@@ -262,15 +296,15 @@ export function sanitizePii(text: string): string {
   //    and other locales. DOB's regex is precise enough that it cannot
   //    mis-match NANP or EU-formatted phone numbers (see header comment
   //    justification (i)-(iii)).
-  out = out.replace(dobPattern(), '[dob]');
+  out = out.replace(dobPattern(), tokens.dob);
 
   // 5. Locale-aware phones (FR/DE/GB/IT/ES/PT) BEFORE NANP fallback.
-  out = redactLocalePhones(out);
+  out = redactLocalePhones(out, tokens.phone);
 
   // 6-7. NANP-shape phones — v1.0.0 fallback. international first
   //      (consumes +CC prefix), then domestic.
-  out = out.replace(phoneInternationalPattern(), '[phone]');
-  out = out.replace(phoneDomesticPattern(), '[phone]');
+  out = out.replace(phoneInternationalPattern(), tokens.phone);
+  out = out.replace(phoneDomesticPattern(), tokens.phone);
 
   return out;
 }

@@ -108,6 +108,13 @@ jobs:
     # or an incompatible copyleft licence. Runs on PR events only.
     runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
+    # IMP-4: scope the extra permission for comment-summary-in-pr at the
+    # job level so the workflow-wide default stays at the least-privilege
+    # `contents: read`. `pull-requests: write` is required for the action
+    # to leave its summary comment on the PR.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

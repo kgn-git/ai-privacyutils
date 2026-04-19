@@ -4,7 +4,7 @@
 #   1. verify-tag — git verify-tag aborts if the tag isn't GPG-signed (S3).
 #   2. publish    — npm ci → build → test → redos:scan → npm publish
 #                   --provenance --access restricted to GitHub Packages,
-#                   then actions/attest-build-provenance@v1 attests the
+#                   then actions/attest-build-provenance@v2.3.0 attests the
 #                   dist/** artefacts to Sigstore Rekor (S4).
 #
 # Permissions are narrowed to the minimum required for OIDC-based
@@ -74,4 +74,7 @@ jobs:
       - name: Attest build provenance for dist artefacts
         uses: actions/attest-build-provenance@db473fddc028af60658334401dc6fa3ffd8669fd # v2.3.0
         with:
-          subject-path: 'dist/**/*.js'
+          # IMP-6: attest .d.ts, .d.ts.map, and .js.map alongside .js so a
+          # type-declaration substitution is covered by the Sigstore Rekor
+          # record, not just the runtime JS.
+          subject-path: 'dist/**'

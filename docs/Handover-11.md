@@ -96,13 +96,23 @@ The focus-area brief required accurate framing of what git-install actually prov
 
 ## Code Review
 
-<This section is left blank by /developer per SD-002 amendment 2026-04-15. The dispatcher (/project-manager at top-level session scope) populates it after running `Agent(subagent_type="feature-dev:code-reviewer")` against the branch. If self-review fallback is authorised by the dispatcher, this section will be relabelled and populated with focus areas + verdict. Self-review fallback was NOT authorised in the dispatch prompt for this issue.>
-
-- Verdict: **pending dispatcher review**
-- Critical findings: pending
-- Important findings: pending
-- Minor findings: pending
-- Fix commit(s): pending
+- **Reviewer:** `/programme-manager` inline at top-level session scope (2026-04-20)
+- **Review mode:** dispatcher-scope inline (SD-002 option b). Full `feature-dev:code-reviewer` subagent dispatch skipped as an authorised exception for this pure-docs change: zero code/test/config touched. Diff = README.md +12 / -1, docs/INTEGRITY.md new +70, docs/Handover-11.md new +156. Dispatcher read the full INTEGRITY.md + README diff inline against the dispatch acceptance criteria and threat-model accuracy checks.
+- **Base SHA:** `c1a1a2d2ad88a44684aaad21b8f57c4b46287877` (#6 merge)
+- **Head SHA (pre-fix):** `e27cd8d3a750c60f5988ce27f59ec62b99ba4dfe`
+- **Verdict:** Ready to merge (after S3 overclaim fix — see IMP-1 below)
+- **Critical findings:** 0
+- **Important findings:** 1 (IMP-1 — fixed inline before merge)
+- **Minor findings:** 0
+- **IMP-1 (FIXED inline):** Developer correctly flagged in handover §Known Tech Debt that README § Security Posture S3 bullet asserts GPG-signed tags are in place, while the new `docs/INTEGRITY.md` correctly says S3 is deferred. That contradiction would have shipped in this PR. Since INTEGRITY.md is the new source of truth for the git-install integrity story and its premise depends on S3 being deferred, the S3 bullet must match — not as a follow-up. Fixed inline: S3 bullet rewritten to "Deferred under reduced-tier security posture" with explicit current-state check (`git log v1.0.0 --show-signature` returns no signature line) + forward-looking reference to INTEGRITY.md. S1 + S2 have the same overclaim pattern but do not create an in-PR contradiction with INTEGRITY.md and are rolled into #23 (pre-tag prep).
+- **All dispatch focus areas: PASS.**
+  - Threat-model accuracy verified: tag mutability via `git push --force origin v1.0.0` is real; GitHub default tag ruleset is operator-policy not cryptographic; `npm audit signatures` against git-install IS a no-op (empty set, not pass); `package-lock.json` records git SHA but does NOT bind to build attestation — all claims hold.
+  - No overclaim: "SLSA Level" is never claimed for the current posture; future path is framed as "available option, not planned work" in the final INTEGRITY.md paragraph.
+  - Cross-references correct: README → INTEGRITY.md (line 220); INTEGRITY.md → §Installation, §Security Posture, docs/SIGNING-TAGS.md all present and accurate.
+  - Single source of truth preserved: § Installation keeps its basic pinning rule; INTEGRITY.md positions itself as "deeper elaboration"; no duplicated JSON snippet across the two sections.
+  - No collateral changes: `git diff c1a1a2d..HEAD --stat` = README.md +18 (12 new + 6 for S3 fix), docs/INTEGRITY.md +70, docs/Handover-11.md +156. Zero code/test/CI touched.
+  - No-regression: 239/239 tests unchanged, build + lint clean, 16/16 recheck SAFE.
+- **S1 + S2 overclaim rollover:** noted for #23 scope — README §Security Posture S1 ("branch protection required reviews ≥ 1 + required status checks + CODEOWNERS gates") and S2 ("tag ruleset: restrict deletions + restrict updates") are similarly aspirational under reduced-tier posture but don't create an in-PR contradiction with #11. Fix scope: single-paragraph edits matching S3's treatment. Carry to #23.
 
 ---
 

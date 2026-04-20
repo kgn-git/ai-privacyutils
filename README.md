@@ -217,6 +217,12 @@ Full security review: `jobflow-programme/docs/security-reviews/SecurityReview-20
 
 **Threat model:** a single maintainer-account takeover or a single un-reviewed commit to `main` can subvert the entire Jobflow LLM path. The hardening budget is therefore weighted toward prevention at the authoring boundary (S1–S3) and end-to-end integrity attestation (S4) with scanners (S5–S8) as second line.
 
+## Integrity verification
+
+Consumer-side integrity posture under the git-install architecture is elaborated in **[`docs/INTEGRITY.md`](docs/INTEGRITY.md)**. It covers exact-tag vs commit-SHA pinning and the threat-model trade-off between them, clone-URL verification against typosquat at the git-URL level, a forward-looking `git log --show-signature` consumer workflow for when S3 (GPG-signed tags) activates, and an explicit enumeration of integrity properties the git-install path does NOT currently provide (no Sigstore Rekor attestation on the artefact; `npm audit signatures` is a no-op). It also records a future SLSA upgrade path — the deleted `publish.yml` workflow at commit `877b478` extended with `actions/attest-build-provenance@v2.3.0` — as an *available option, not planned work*, should the package later be promoted to external distribution.
+
+The basic pinning rule ("pin to an exact tag... never use a branch name or `main`") in § Installation is the install-time contract; `docs/INTEGRITY.md` is the threat-model elaboration for consumers who need to reason about what that pin actually protects against.
+
 ## SemVer policy
 
 The package is compliance-critical — regressions in recall on canonical inputs are breaking changes even when the code change is subtractive.

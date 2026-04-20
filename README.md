@@ -203,7 +203,7 @@ This package is a canonical compliance control on the LLM prompt edge. A silent 
 
 - **S1 — `main` branch protection.** Required reviews ≥ 1; dismiss stale approvals on new commits; required status checks (lint, typecheck, test, redos-scan, audit, dependency-review); signed commits required; linear history; block force push. CODEOWNERS gates `.github/`, `package.json`, `package-lock.json`, `src/patterns.ts`, `src/pii-middleware.ts`.
 - **S2 — tag ruleset.** `v*.*.*` tag pattern: restrict deletions, restrict updates (immutable), maintainers only.
-- **S3 — GPG-signed tags.** v1.0.0 and every release tag is an annotated `git tag -s` signed with a dedicated Ed25519 hardware-token key (YubiKey 5 series) registered under the release-maintainer GitHub account. Key fingerprint published in `docs/SIGNING-TAGS.md`.
+- **S3 — GPG-signed tags.** **Deferred under reduced-tier security posture (2026-04-19 decision, single-maintainer internal package — see `docs/Handover-35.md`).** Intent is to cut every release tag with an annotated `git tag -s` signed by a dedicated Ed25519 hardware-token key (YubiKey 5 series) published in `docs/SIGNING-TAGS.md`. Current state: `git log v1.0.0 --show-signature` returns no signature line. Consumer-side `git log --show-signature` workflow documented in [`docs/INTEGRITY.md`](docs/INTEGRITY.md) for when S3 activates; until then it is a no-op. S3 will move to "in place" alongside S1 + S2 in a later sprint if the threat model shifts (external distribution, multi-maintainer).
 - **S4 — npm publish with provenance.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry publish step; consumers install directly from the git tag and build `dist/` via the `prepare` lifecycle script. Build integrity is the consumer's own CI concern (building from a pinned git tag is deterministic). If the package is later promoted to a registry for external distribution, the `publish.yml` workflow can be revived from git history at commit `877b478`.
 - **S5 — ReDoS scanner in CI.** `recheck` v4.x (NOT the unmaintained `safe-regex`) runs programmatically over `src/patterns.ts` via `scripts/redos-scan.mjs` as a required CI check. `eslint-plugin-redos@^4` also runs via `npm run lint`.
 - **S6 — dependency-review-action@v4.** Required CI check on every PR; fails on high/critical CVE or GPL-family licence.
@@ -216,6 +216,12 @@ This package is a canonical compliance control on the LLM prompt edge. A silent 
 Full security review: `jobflow-programme/docs/security-reviews/SecurityReview-2026-04-19-privacy-utils-v1.0.0-hardening.md`.
 
 **Threat model:** a single maintainer-account takeover or a single un-reviewed commit to `main` can subvert the entire Jobflow LLM path. The hardening budget is therefore weighted toward prevention at the authoring boundary (S1–S3) and end-to-end integrity attestation (S4) with scanners (S5–S8) as second line.
+
+## Integrity verification
+
+Consumer-side integrity posture under the git-install architecture is elaborated in **[`docs/INTEGRITY.md`](docs/INTEGRITY.md)**. It covers exact-tag vs commit-SHA pinning and the threat-model trade-off between them, clone-URL verification against typosquat at the git-URL level, a forward-looking `git log --show-signature` consumer workflow for when S3 (GPG-signed tags) activates, and an explicit enumeration of integrity properties the git-install path does NOT currently provide (no Sigstore Rekor attestation on the artefact; `npm audit signatures` is a no-op). It also records a future SLSA upgrade path — the deleted `publish.yml` workflow at commit `877b478` extended with `actions/attest-build-provenance@v2.3.0` — as an *available option, not planned work*, should the package later be promoted to external distribution.
+
+The basic pinning rule ("pin to an exact tag... never use a branch name or `main`") in § Installation is the install-time contract; `docs/INTEGRITY.md` is the threat-model elaboration for consumers who need to reason about what that pin actually protects against.
 
 ## SemVer policy
 

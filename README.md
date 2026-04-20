@@ -122,6 +122,20 @@ re2.exec('mail jane@example.com');
 
 This package does not create a new Art. 13 disclosure obligation. Platform-side privacy notices should nonetheless note that PII redaction is applied before third-party LLM processing (it is both accurate and claims the minimisation credit).
 
+## Design decisions and non-goals
+
+This section captures *design-intent* commitments — the deliberate shape of the library, not its compliance basis (covered above in GDPR Rationale). These decisions bound future contribution: a change that violates any of them is a v2.0 scope break, not a patch-level fix.
+
+- **One-way redaction is intentional, not a limitation.** `sanitizePii` and `piiMiddleware` perform a destructive substitution: the original PII span is replaced by a fixed token and discarded. This places the library on the *anonymisation* side of the Art. 4(5) pseudonymisation / anonymisation line at the prompt-emission boundary (prompt-side) — the strong posture — rather than the weaker "pseudonymisation with retained mapping" posture. It is aligned with Art. 25 privacy-by-default: the zero-config middleware produces the strongest available protection without operator action.
+
+- **No reversal map is stored anywhere in the library.** There is no in-memory, on-disk, keychain, database, or side-channel mapping from redaction token back to original PII — not per-call, not per-session, not per-model. Every call is stateless over its input. This is an invariant enforced by architecture (the library has no storage dependency; no `fs`, no `crypto.createHash` keyed on PII, no event emitters carrying PII spans) and should not be weakened without a corresponding v2.0 major bump and explicit compliance re-review.
+
+- **Future re-identification capability would be a new API surface, not a bug fix.** If a consumer use case eventually requires reversible masking (e.g. showing the user a tailored cover letter with their real email re-inserted before delivery), the correct path is a *new* API — e.g. a `reversibleSanitizePii` or a paired `tokenize`/`detokenize` pair — carrying its own threat model, storage contract, and compliance review. It is not a "fix" to `sanitizePii` / `piiMiddleware`, which by design cannot be retrofitted into a reversible primitive without violating the invariant above. Future contributors: if a downstream issue asks to "make redaction reversible", do not patch this library — propose a parallel API.
+
+- **Consumer apps needing reversible masking maintain their own mapping outside the middleware.** The consumer owns the mapping table, its storage, its access control, its retention policy, and its risk register; the mapping must live *outside* the LLM prompt path (never "reversed sanitizePii" semantics, which would contradict the invariant). Typical shape: consumer captures `(sessionId, tokenKind, originalSpan)` triples at *their* application layer before calling the LLM, then applies inverse substitution to the LLM output at their rendering layer. The middleware never sees the mapping.
+
+See GDPR Rationale above for the *compliance basis* behind these choices (Art. 4(5) / 25 / 32).
+
 ## Pattern inventory
 
 | Export (call with `()`) | Matches | Replacement token |

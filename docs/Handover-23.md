@@ -100,17 +100,28 @@
 - Branch pushed to origin: ✅ `feature/23-tag-cut-prep` @ `0b2dfa8`
 - PR opened against `main`: ✅ [`#32`](https://github.com/kgn-git/jobflow-privacyutils/pull/32)
 
-## Code Review (left blank by /developer — populated by dispatcher AFTER /developer returns)
+## Code Review
 
-<!-- This section is left blank by /developer per SD-002 amendment 2026-04-15.
-     The dispatcher (programme-manager or project-manager at top-level session)
-     populates it after running Agent(subagent_type="feature-dev:code-reviewer")
-     against the branch. -->
-- Verdict: **pending dispatcher review**
-- Critical findings: pending
-- Important findings: pending
-- Minor findings: pending
-- Fix commit(s): pending
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-20 by `/programme-manager` at top-level session)
+- **Base SHA:** `4a89365cbea98bc60659df333d91e6db85a66319` (#11 merge)
+- **Head SHA:** `f0919f9` (at dispatch time)
+- **Verdict:** Ready to merge
+- **Critical findings:** 0
+- **Important findings:** 0
+- **Minor findings:** 2 (both confidence 25 — below threshold; not fixed)
+- **Minor-1 (not fixed):** Warm-up strategy — 4 warm-up runs (1 outside loop + 3 inside) are structurally identical to measured runs. Sufficient for the stated goal (priming JIT + libphonenumber metadata); 25× headroom against ceiling makes it moot. No action.
+- **Minor-2 (not fixed):** `totalRedactableBytes` calc at `pii-middleware.test.ts:385-387` counts only the 3 user-message text parts; system + assistant string content (~95 bytes total) not included. Sanity assertion `> 9000 && < 12000` still holds. Comment-level inaccuracy, no behavioural impact.
+- **All 10 focus areas: PASS.**
+  - **Middleware benchmark realism:** correct shape (system + user array content + assistant history + sibling provider fields), calls through `piiMiddleware.transformParams` not `sanitizePii` direct, mean (not max) assertion, measured value documented.
+  - **Italian Via fixtures:** all 3 cases empirically correct against the actual `addressItPattern()` regex; `Via Lattea visible` lacks trailing `\b\d{1,4}\b` so does NOT match; lowercase `via` not in case-sensitive keyword set; `Via Lattea 5` matches structurally and redacts to `[address]`.
+  - **Via Lattea 5 decision quality:** justification comment present at `locale-patterns.test.ts:239-262`, substantive, cites GDPR Art. 5(1)(c) / 32, documents narrow escape route (Italian city context after number) as out-of-scope for v1.1.
+  - **Postcode JSDoc accuracy:** verified by reviewer — FR/DE/IT/ES use `\b\d{5}\s+<city>\b` with only city-letter Unicode class differing; UK + PT structurally distinctive. JSDoc claims accurate.
+  - **Phone-locale JSDoc citation:** verified — `MIN_PHONE_DIGITS` at `sanitize-pii.ts:62`, `PHONE_FORMATTED_RE` at `sanitize-pii.ts:85`, `nationalNumber` at lines 123/127/129. No rename drift.
+  - **S1 + S2 README parity with S3:** all three bullets open with identical bold "Deferred under reduced-tier security posture (2026-04-19 decision, single-maintainer internal package — see `docs/Handover-35.md`)" phrasing. Each has Intent + Current state lines. Threat-model paragraph at line 218 untouched.
+  - **No regex changes:** `src/patterns.ts` diff is JSDoc-only across all 16 regex bodies (verified by reviewer).
+  - **Backward compat (testing):** existing test bodies in `locale-patterns.test.ts` + `pii-middleware.test.ts` unmodified. Only authorised change: bench label rename `sanitizePii → sanitizePii regex-only`.
+  - **Test count math:** 239 + 3 (Italian Via) + 1 (middleware bench) = **243/243** confirmed.
+- **Reviewer subagent worked first try** — no PM-003 stall this time.
 
 ---
 

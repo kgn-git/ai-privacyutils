@@ -269,6 +269,19 @@ export function addressPtPattern(): RegExp {
  * uppercase per Royal Mail convention; lowercase postcodes in free text
  * are out-of-scope for v1.1 (documented residual gap).
  *
+ * ## Locale specificity (#23 MIN-2)
+ *
+ * `postcodeUkPattern` is the only genuinely locale-specific bare-postcode
+ * factory in `postcodeByLocale`. The UK alphanumeric outward/inward shape
+ * (`[A-Z]{1,2}\d[A-Z\d]? \d[A-Z]{2}`) has no structural collision with any
+ * other supported locale — calling `postcodeUkPattern()` on a French
+ * `75001 Paris` string returns zero matches. The UK factory is therefore
+ * safe to use in isolation if a consumer wants UK-only postcode coverage.
+ * Contrast with the FR/DE/IT/ES factories below, which share a
+ * byte-identical core regex and differ only in accented-character
+ * character-class widening — see their JSDoc for the overlap-by-design
+ * trade-off.
+ *
  * ReDoS-safe: no quantifier ambiguity, all bounded and disjoint.
  */
 export function postcodeUkPattern(): RegExp {
@@ -287,6 +300,28 @@ export function postcodeUkPattern(): RegExp {
  * trade: bare `\d{5}` alone is too broad; postcode + city is the actual
  * re-identification surface flagged by compliance review §5.2.
  *
+ * ## Continental overlap by design (#23 MIN-2)
+ *
+ * `postcodeFrPattern`, `postcodeDePattern`, `postcodeItPattern`, and
+ * `postcodeEsPattern` are byte-identical structurally — all four are
+ * `\b\d{5}\s+<capitalised-city-token>\b`. They differ only in the
+ * Unicode character class used for the leading city letter (FR/IT/ES
+ * use `[A-Z\u00C0-\u00DC]`; DE narrows to `[A-Z\u00C4\u00D6\u00DC]` for
+ * Ä/Ö/Ü only).
+ *
+ * Consequence: a French-only consumer calling `postcodeFrPattern()` on
+ * Italian text `"CAP 00100 Roma"` will match it. The locale key is
+ * primarily an organisational / API-surface distinction, not a precision
+ * gate. Consumers who need strict locale-scoped redaction must rely on
+ * surrounding context (e.g. locale-tagged input routing) — this pattern
+ * alone cannot disambiguate 5-digit continental postcodes.
+ *
+ * This is an intentional v1.1 trade-off: tightening each continental
+ * locale against known city-name whitelists would introduce a large
+ * maintenance surface (every French / German / Italian / Spanish city)
+ * for marginal precision gain over a redaction library whose contract is
+ * already "conservative one-way redaction".
+ *
  * ReDoS-safe: bounded segments, no nested quantifiers.
  */
 export function postcodeFrPattern(): RegExp {
@@ -295,8 +330,21 @@ export function postcodeFrPattern(): RegExp {
 
 /**
  * German postcode — 5 digits followed by a capitalised city token.
+ *
  * Same rationale + shape as French. Covers Berlin (10xxx), München (8xxxx),
- * Hamburg (2xxxx) etc.
+ * Hamburg (2xxxx) etc. Leading-letter character class narrowed to the
+ * German-specific umlaut set (`Ä/Ö/Ü`) — structurally still a 5-digit
+ * continental postcode.
+ *
+ * ## Continental overlap by design (#23 MIN-2)
+ *
+ * See `postcodeFrPattern` JSDoc above for the full overlap rationale.
+ * Summary: FR/DE/IT/ES postcode factories share the `\b\d{5}\s+<city>\b`
+ * core and differ only in the leading city-letter character class. A
+ * German-only consumer calling `postcodeDePattern()` will still match
+ * `75001 Paris` (FR) and `28013 Madrid` (ES) — the city-letter narrowing
+ * does not gate out other continental locales' ASCII capital letters.
+ * Locale key is organisational, not a precision filter.
  */
 export function postcodeDePattern(): RegExp {
   return /\b\d{5}\s+[A-Z\u00C4\u00D6\u00DC][a-z\u00E4\u00F6\u00FC\u00DF'-]{2,30}\b/g;
@@ -304,8 +352,15 @@ export function postcodeDePattern(): RegExp {
 
 /**
  * Italian postcode — 5 digits (CAP) followed by a capitalised city token.
+ *
  * Same shape as FR/DE postcodes. Covers 00100-98168 mainland + Sicily +
  * Sardinia.
+ *
+ * ## Continental overlap by design (#23 MIN-2)
+ *
+ * See `postcodeFrPattern` JSDoc above for the full rationale. Italian
+ * CAP shares the `\b\d{5}\s+<city>\b` core with FR/DE/ES — precision is
+ * locale-agnostic at the regex level.
  */
 export function postcodeItPattern(): RegExp {
   return /\b\d{5}\s+[A-Z\u00C0-\u00DC][a-z\u00E0-\u00FF'-]{2,30}\b/g;
@@ -313,7 +368,14 @@ export function postcodeItPattern(): RegExp {
 
 /**
  * Spanish postcode — 5 digits followed by a capitalised city token.
+ *
  * Same shape as FR/DE/IT. Covers 01xxx-52xxx mainland + Canarias.
+ *
+ * ## Continental overlap by design (#23 MIN-2)
+ *
+ * See `postcodeFrPattern` JSDoc above for the full rationale. Spanish
+ * CP shares the `\b\d{5}\s+<city>\b` core with FR/DE/IT — precision is
+ * locale-agnostic at the regex level.
  */
 export function postcodeEsPattern(): RegExp {
   return /\b\d{5}\s+[A-Z\u00C0-\u00DC][a-z\u00E0-\u00FF'-]{2,30}\b/g;
@@ -329,6 +391,15 @@ export function postcodeEsPattern(): RegExp {
  * The 4-3 shape is distinctive enough that city context is NOT required —
  * there are few natural language contexts where `NNNN-NNN` digit patterns
  * occur incidentally.
+ *
+ * ## Locale specificity (#23 MIN-2)
+ *
+ * Along with `postcodeUkPattern`, `postcodePtPattern` is genuinely
+ * locale-specific — the NNNN-NNN hyphenated shape is unique to Portugal
+ * among supported locales. Unlike FR/DE/IT/ES (which share a 5-digit
+ * continental core), calling `postcodePtPattern()` on French or German
+ * text will NOT match their 5-digit postcodes. Safe to use in isolation
+ * for PT-only redaction.
  *
  * ReDoS-safe: bounded segments, optional suffix is also bounded.
  */
@@ -461,6 +532,41 @@ export function phonePtValidator(): (candidate: string) => boolean {
  * `postcodeByLocale.uk`) but the libphonenumber-js country code passed
  * through is `GB` (ISO 3166-1 alpha-2 canonical form for the United
  * Kingdom).
+ *
+ * ## Dual API surface: validators are looser than sanitizer redaction (#23 MIN)
+ *
+ * `phoneByLocale.X()` returns a validator that answers a single question:
+ * "would libphonenumber-js accept this string as a valid phone number in
+ * locale X?". That is `isValidPhoneNumber(candidate, country)` — the same
+ * contract libphonenumber-js itself exposes, with libphonenumber-js's own
+ * tolerance for partially-formatted inputs.
+ *
+ * `sanitizePii`'s redaction pipeline is **strictly tighter**. On top of
+ * the locale validator it additionally requires:
+ *
+ *   - `PHONE_FORMATTED_RE.test(raw)` — the raw candidate must already
+ *     look phone-shaped (digits, `+`, separators) in the surrounding
+ *     text so the sanitizer does not greedily redact every valid
+ *     subsequence that libphonenumber-js could parse inside free-text
+ *     numeric strings.
+ *   - `nationalNumber.length >= MIN_PHONE_DIGITS` (7) — rejects short
+ *     numeric shapes that libphonenumber-js might accept as valid
+ *     short-codes / emergency numbers in some locales but which create
+ *     excessive false-positive redactions in CV text.
+ *
+ * Consequence: `phoneByLocale.de()('123')` may return `true` for some
+ * short-code inputs that `sanitizePii('...123...', {...})` would NOT
+ * redact (because `PHONE_FORMATTED_RE` would reject the surrounding
+ * shape, or the national-digit-count guard would reject the length).
+ * This is intentional — the validators answer "is this a phone number?"
+ * for programmatic composition; the sanitizer additionally applies
+ * precision guards so free-text CV prompts are not over-redacted.
+ *
+ * Consumers who want "what would `sanitizePii` redact?" MUST call
+ * `sanitizePii` directly — do NOT compose `phoneByLocale` validators to
+ * approximate it; you will see looser behaviour than the actual redaction
+ * pipeline. See `src/sanitize-pii.ts` for the precision-guard
+ * implementation.
  */
 export const phoneByLocale = {
   fr: phoneFrValidator,

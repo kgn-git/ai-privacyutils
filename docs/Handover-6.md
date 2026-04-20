@@ -98,17 +98,25 @@ Commit SHAs will be finalised after the handover commit lands. Base commit on ma
 
 ---
 
-## Code Review (left blank by /developer per SD-002 amendment 2026-04-15)
+## Code Review
 
-_The `/developer` subagent does not invoke code review. The dispatcher (`/project-manager` or `/programme-manager` at top-level session scope) runs `Agent(subagent_type="feature-dev:code-reviewer", ...)` against this branch after `/developer` returns, and populates this section with the verdict before authorising merge._
-
-- **Verdict:** _pending dispatcher review_
-- **Critical findings:** _pending_
-- **Important findings:** _pending_
-- **Minor findings:** _pending_
-- **Fix commit(s):** _pending_
-
-Self-review fallback **not authorised** by the dispatch prompt. Do not self-review from inside this subagent — silent degradation would violate SD-002. If the dispatcher prefers to skip reviewer-subagent dispatch for a doc-only change, the dispatcher (not `/developer`) makes and records that waiver here.
+- **Reviewer:** `/programme-manager` inline at top-level session scope (2026-04-19)
+- **Review mode:** dispatcher-scope inline (SD-002 option b). Full `feature-dev:code-reviewer` subagent dispatch skipped as an authorised exception for this pure-docs change: zero code/test/config files touched, zero regression surface, zero new semantic claims beyond a narrow design-intent restatement. Diff = README.md +14 / -0. Inline review reads the 14 new lines directly against the dispatch acceptance criteria.
+- **Base SHA:** `6688a06518c4c5544b5c3f55d8000febd8d797c0`
+- **Head SHA:** `1c64f41` (at dispatch time)
+- **Verdict:** Ready to merge
+- **Critical findings:** 0
+- **Important findings:** 0
+- **Minor findings:** 1 (confidence 40 — not fixed)
+- **Minor-1 (not fixed):** The framing "anonymisation side of the Art. 4(5) pseudonymisation / anonymisation line" is slightly loose — Art. 4(5) strictly defines only pseudonymisation; the anonymisation concept is framed by Recital 26 (the "all reasonable means to identify" test) rather than by Art. 4 directly. The practical framing is defensible at a design-intent level and the section's last line explicitly cross-refs the separate `GDPR Rationale` section for compliance basis. Not worth blocking; would only matter in a formal compliance filing, which this section is not.
+- **All dispatch focus areas: PASS.**
+  - GDPR references accurate enough for a design-intent section (Art. 4(5) + Art. 25 named correctly; see Minor-1 for pedantry).
+  - Design-intent vs compliance-basis separation clear — intro paragraph explicitly draws the distinction; closing line cross-refs `GDPR Rationale` for compliance basis.
+  - Non-goal framing unambiguous — bullet 3 says "do not patch this library — propose a parallel API" verbatim.
+  - Consumer guidance concrete — bullet 4 gives the `(sessionId, tokenKind, originalSpan)` mapping shape with access-control + retention owner explicitly named as the consumer.
+  - Section under 60 lines (14 lines) — no ADR spin-off needed, consistent with dispatch direction.
+  - No collateral changes: `git diff 6688a06..1c64f41 --stat` = README.md +14, docs/Handover-6.md +143. No code, no tests, no config.
+  - No-regression: 239/239 tests unchanged, build + lint clean.
 
 ---
 

@@ -199,6 +199,69 @@ describe('sanitizePii — Italian addresses (R1)', () => {
   });
 });
 
+describe('sanitizePii — Italian Via false-positive fixtures (#23 MIN-1)', () => {
+  /**
+   * Adversarial cases pinning the precision boundary of `addressItPattern`.
+   *
+   * Source: privacyutils#23 — SD-002 review of PR #22 (R1 locale addresses)
+   * flagged the Italian `Via` prefix as the locale with the highest
+   * false-positive risk. The pattern requires a trailing `\d{1,4}` house
+   * number *after* 1-5 name tokens, which strongly constrains false matches
+   * but does not eliminate them for astronomical / semantic "Via" usages.
+   *
+   * The three pinned cases below document the pattern's current behaviour
+   * so future tuning cannot silently regress either precision or recall.
+   */
+
+  it('does NOT redact "Via Lattea visible from the observatory" (no trailing house number — pattern precision preserved)', () => {
+    // "Via Lattea" = Italian for "Milky Way" — a common semantic use of
+    // `Via` with a capitalised celestial-body name but no trailing digit.
+    // addressItPattern requires `\s+\d{1,4}\b` at the end; absence of the
+    // digit means no match. Verified empirically before RED→GREEN pin.
+    expect(
+      sanitizePii('Via Lattea visible from the observatory.'),
+    ).toBe('Via Lattea visible from the observatory.');
+  });
+
+  it('does NOT redact lowercase "accessed via port 443" (word-boundary + case discipline)', () => {
+    // Lowercase `via` (preposition) is outside the closed alternation set
+    // of address-prefix keywords which all start with a capital letter
+    // (Via|Viale|Corso|Piazza|...). The leading `\b` and the case-sensitive
+    // alternation together guarantee the English preposition is never
+    // treated as an Italian address keyword. Pinning the negative case
+    // protects against future refactors that might add a case-insensitive
+    // flag or widen the alternation to lowercase forms.
+    expect(sanitizePii('accessed via port 443')).toBe(
+      'accessed via port 443',
+    );
+  });
+
+  it('DOES redact "Via Lattea 5 telescope array" (privacy-over-precision — structurally ambiguous with a real address)', () => {
+    // Adversarial case. "Via Lattea 5" is structurally indistinguishable
+    // from a legitimate Italian street address: `Via` + capitalised name
+    // + 1-4 digit number. The pattern's precision boundary is "structural
+    // shape", not "semantic meaning" — a regex cannot disambiguate between
+    // a fictional astronomical reference and a real postal address.
+    //
+    // Design decision (pinned here per issue #23): privacy-over-precision.
+    // A one-way redaction library is deliberately conservative — a
+    // false-positive redaction on rare astronomical / semantic "Via X N"
+    // phrases is preferable to a recall gap on a real Italian address.
+    // The downstream cost of a redacted "Via Lattea 5" in a CV-scoring
+    // prompt is zero; the downstream cost of a leaked "Via Roma 15" is
+    // a GDPR Art. 5(1)(c) / Art. 32 incident.
+    //
+    // If this trade ever flips (e.g. a consumer hits material precision
+    // loss on astronomical fixtures), the narrow fix is to require an
+    // Italian city / locality context window after the number — out of
+    // scope for v1.1 patch work. Not changing the pattern here; pinning
+    // the behaviour.
+    expect(sanitizePii('Via Lattea 5 telescope array')).toBe(
+      '[address] telescope array',
+    );
+  });
+});
+
 describe('sanitizePii — Spanish addresses (R1)', () => {
   it('redacts "Calle Mayor 10"', () => {
     expect(sanitizePii('Vivo en Calle Mayor 10 ahora.')).toBe(
@@ -466,10 +529,16 @@ describe('sanitizePii — v1.0.0 backward compatibility (no regression on EN fix
 });
 
 // -----------------------------------------------------------------------
-// Benchmark — middleware overhead budget (AC: <10ms on 10KB prompt)
+// Benchmark — `sanitizePii` regex-only overhead (AC: <10ms on 10KB prompt)
+//
+// This benchmark measures the regex pipeline cost on a plain 10KB string.
+// It does NOT include the deep-clone / multi-message traversal overhead
+// introduced by `piiMiddleware.transformParams` — that is covered by the
+// middleware-level benchmark in `src/__tests__/pii-middleware.test.ts`
+// (per privacyutils#23 IMP-1 Option b — SD-002 review of PR #22).
 // -----------------------------------------------------------------------
 
-describe('sanitizePii — performance budget', () => {
+describe('sanitizePii regex-only — performance budget', () => {
   it('processes a 10KB prompt in under 10ms (mean of 10 runs)', () => {
     // Build a ~10KB prompt by repeating a representative EU CV block.
     const block =

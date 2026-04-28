@@ -162,14 +162,20 @@ See GDPR Rationale above for the *compliance basis* behind these choices (Art. 4
 | `piiPatterns.phoneInternational()` | `+?CC-3-3-4` NANP-shape (retained v1.0.0 fallback for numbers outside the six EU locales above) | `[phone]` |
 | `piiPatterns.phoneDomestic()` | `3-3-4` NANP-shape fallback | `[phone]` |
 | `piiPatterns.dob()` | Numeric `DD.MM.YYYY` / `DD/MM/YYYY` / `DD-MM-YYYY` / `YYYY-MM-DD` + named-month EN/FR/DE/IT/ES/PT | `[dob]` |
+| `piiPatterns.nationalIdByLocale.uk()` | UK NINO validator (regex-only — HMRC invalid-prefix rules + suffix `[A-D]`). Accepts compact `AB123456C` and space-separated `AB 12 34 56 C` forms. | `[nationalId]` |
+| `piiPatterns.nationalIdByLocale.fr()` | French NIR validator (15 digits, sex prefix `1` or `2`, mod-97 check key). Accepts compact and canonical-spaced (`X XX XX XXXXX XXX XX`) forms. Examples shown in tests use a synthetic placeholder body (`2000000000001` — sex=2 / year=00 / dept=00 / commune=000 / seq=001 — not a real demographic profile). | `[nationalId]` |
+| `piiPatterns.nationalIdByLocale.it()` | Italian Codice Fiscale validator (16 alphanumeric, position-weighted check letter, `RSSMRA85T10A562X` shape). | `[nationalId]` |
+| `piiPatterns.nationalIdByLocale.es()` | Spanish DNI validator (8 digits + check letter from mod-23 lookup `TRWAGMYFPDXBNJZSQVHLCKE`). | `[nationalId]` |
+| `piiPatterns.nationalIdByLocale.pt()` | Portuguese NIF validator (9 digits, weighted mod-11 check digit). Word-boundary anchored extraction + check-digit gate keeps false-positive rate down on bare 9-digit numerics in CV text. | `[nationalId]` |
 
 Note: unlike the other pattern factories (which return `RegExp`), the `phoneByLocale.*()` factories return a **validator function** `(candidate: string) => boolean` backed by `libphonenumber-js` directly. API-choice rationale is documented inline in `src/patterns.ts` (file-header JSDoc → "Factory API choice: validator over RegExp") and in `docs/Handover-2.md` § Factory API choice.
 
-Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → dob → localePhones (fr, de, gb, it, es, pt) → intlPhone → domesticPhone**. This order is mandatory:
+Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → nationalIds (it, uk, fr, es, pt) → dob → localePhones (fr, de, gb, it, es, pt) → intlPhone → domesticPhone**. This order is mandatory:
 
 - Addresses run **before** postcodes so a full structured address like `12 rue de la Paix, 75001 Paris` consumes the street run first; the residual `75001 Paris` is then redacted by the postcode pass.
 - Addresses also run **before** phone so the leading house number is not eaten by the phone pattern.
 - Postcodes run **before** phone — 5-digit continental postcodes and UK/PT alphanumerics are disjoint from every phone candidate, but ordering is pinned for future-proofing.
+- **National-IDs (R10 — v1.1) run after postcodes and before DOB.** PT NIF's bare 9-digit shape could otherwise eat the 5-digit portion of a postcode sequence; running PT NIF after postcodes guarantees postcodes are consumed first. National-IDs run before DOB so 15-digit NIRs and 16-char Codice Fiscales (which contain date-shaped digit substrings) are claimed whole before DOB tries its `DD[./-]MM[./-]YYYY` regex. The validator-factory pattern (extract candidate via bounded regex, then apply per-locale check-digit / HMRC invalid-prefix rules) keeps the false-positive rate acceptable on free CV text — see Patterns table for per-locale algorithm notes.
 - **DOB runs before phones (reordered in v1.1 for R2)** — v1.0.0 placed DOB last because the NANP regex could not mis-match `DD.MM.YYYY` sequences, but `libphonenumber-js`'s broader candidate-finder does recognise date-like digit sequences (`23.05.1985`, `1985-05-23`) as valid phone numbers in DE + other locales. DOB's regex is precise enough (anchored `\b`, specific separator alternation) that it cannot mis-match NANP or EU phone shapes, so flipping the order is safe. See `src/sanitize-pii.ts` header docblock (i)-(iii) rationale.
 - **Locale-aware phones run before NANP fallback** — a FR number `06 12 34 56 78` must be consumed whole by the locale pass; the NANP regex could otherwise match a 3-3-4 substring and leave `06 ` dangling.
 
@@ -177,7 +183,7 @@ Tests pin the ordering with adversarial fixtures (`src/__tests__/sanitize-pii.te
 
 ## Known Limitations (C2 per compliance review)
 
-v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/IT/ES/PT + UK), **R2** (EU-native mobile + landline phone formats via `libphonenumber-js`), **R5** (IDN email addresses), **R7** (ReDoS risk on adversarial input — runtime input-length cap, see S12 in Security posture), and **R8** (replacement-token collision — opt-in `tokenFormat: 'sentinel'`). Residual gaps after v1.1 are documented below with narrowed scope.
+v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/IT/ES/PT + UK), **R2** (EU-native mobile + landline phone formats via `libphonenumber-js`), **R5** (IDN email addresses), **R7** (ReDoS risk on adversarial input — runtime input-length cap, see S12 in Security posture), **R8** (replacement-token collision — opt-in `tokenFormat: 'sentinel'`), and **R10** (national-level identifiers UK NINO / FR NIR / IT Codice Fiscale / ES DNI / PT NIF). Residual gaps after v1.1 are documented below with narrowed scope.
 
 | Ref | Gap | Severity | v1.1 status | Planned |
 |---|---|---|---|---|
@@ -188,7 +194,8 @@ v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/I
 | R3 | Applicant's full name in CV header flows unredacted. Regex is an inappropriate tool (CVs are lists of proper nouns — company names, universities, referees). NER is the right tool. | Medium | Not mitigated | v1.2 — NER-based name redaction (Microsoft Presidio or equivalent) |
 | R5 | ~~IDN email addresses with non-ASCII local or domain part (`françois@école.fr`, `user@münchen.de`) pass through unredacted.~~ **Resolved in v1.1** via Unicode property escapes (`\p{L}\p{N}`) + `u` flag + negative-lookahead Unicode boundary in `emailPattern()`. IDN local parts (RFC 6531 / SMTPUTF8), IDN domains (RFC 5892 / IDNA 2008), Unicode TLDs (`.中国`), and punycode-encoded (`xn--…`) addresses all redact correctly. Greedy `{2,24}` TLD consumption over-redacts email-shaped Unicode tokens — correct privacy trade-off (see `src/__tests__/idn-email.test.ts`). | Low | **Resolved** | v1.1 (this release) |
 | R7 | ~~ReDoS risk on adversarial input. Static CI lint (`recheck` + `eslint-plugin-redos`) catches known super-linear shapes but can miss novel combinations, especially around Unicode property escapes.~~ **Resolved in v1.1** via runtime input-length cap (`sanitizePii`/`createPiiMiddleware` `{ maxInputLength }`, default `DEFAULT_MAX_INPUT_LENGTH` = 500_000 code units). O(1) gate runs BEFORE any regex; over-cap inputs throw `PiiInputTooLargeError`. See ADR 002 (`docs/adr/002-input-length-cap.md`) and S12 in Security posture. | Medium | **Resolved** | v1.1 (this release) |
-| R10 | National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors. | Low | Not mitigated | v1.2 — national-ID pattern set |
+| R10 | ~~National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors.~~ **Resolved in v1.1** for UK/FR/IT/ES/PT via `nationalIdByLocale.{uk,fr,it,es,pt}()` validator factories with check-digit gating (DNI mod-23, NIF mod-11, FR NIR mod-97, IT Codice Fiscale position-weighted check letter); UK NINO regex-only with HMRC invalid-prefix rules. **Member-State framing (Art. 87):** the five identifiers covered are Member-State-issued national identifiers under each respective domestic legal framework — the R10 redaction pass aligns them under the destructive one-way redaction contract. **DE Steuer-ID / Rentenversicherungsnummer deferred to v1.2.** | Medium-Low | **Resolved (UK/FR/IT/ES/PT)** | v1.1 (this release); DE in v1.2 |
+| R10-residual | (a) PT NIF mod-11 has a 1/11 false-positive rate on random 9-digit sequences whose last digit happens to match the computed check digit (`000000000`, `123456789` shaped) — accepted precision trade-off (recall over precision on free CV text). (b) FR NIR Corsica conversion (`2A`/`2B` département codes mapped to `19`/`18` before mod-97) is not implemented — Corsican NIRs will fail validation and pass through. (c) IT Codice Fiscale omocodia (letter substitution on hash collision) not handled — rare edge case. (d) DE Steuer-ID / Rentenversicherungsnummer deferred. (e) Redaction is destructive / one-way — matched bytes are not retained, logged, or returned. | Low | Documented gaps | v1.2 — DE coverage; future — Corsica NIR + IT omocodia per consumer demand |
 | R8 | ~~Replacement tokens `[email]` / `[phone]` / `[address]` / `[postcode]` / `[dob]` collide with user-authored literal strings. Not cryptographically distinguishable from authored text.~~ **Resolved in v1.1** via opt-in `tokenFormat: 'sentinel'` option — produces `<<REDACTED_X>>` low-collision tokens. Default remains `'readable'` (v1.0.0 byte-identical); default swap to sentinel deferred to v2.0 for SemVer. | Low | **Resolved (opt-in)** | v1.1 (this release) |
 
 Both **R1** (v1.1 #1) and **R2** (v1.1 #2) are now in-package. Consuming apps no longer need caller-level scrubbing for FR/DE/IT/ES/PT structured addresses, UK/FR/DE/IT/ES/PT postcodes, or any of the six supported phone locales. For scoring, the existing `sanitizePii` on the chunker boundary (`cv-chunker.ts:186`, `cv-chunker.ts:203`) and post-LLM evidence-quote scrubbing (`llm-coverage.service.ts:178`) remain in place as defence-in-depth.
@@ -232,7 +239,7 @@ The package is compliance-critical — regressions in recall on canonical inputs
 | Pattern removal | **Major** |
 | Default replacement-token rename (e.g. flipping default from `[email]` to `<<REDACTED_EMAIL>>` — scheduled for v2.0 per issue #9) | **Major** |
 | Order-of-application reshuffling that changes output on fixtures | **Major** |
-| New pattern (e.g. national-ID in v1.2) | **Minor** |
+| New pattern (e.g. national-ID in v1.1 for UK/FR/IT/ES/PT, DE in v1.2) | **Minor** |
 | New locale coverage (e.g. FR/DE/IT/ES/PT addresses in v1.1) | **Minor** |
 | New opt-in option that preserves the v1.0.0 default output byte-identically (e.g. `tokenFormat: 'sentinel'` in v1.1) | **Minor** |
 | Pattern tuning — fewer false positives with same recall on all prior fixtures | **Patch** |
@@ -263,14 +270,16 @@ Dictionary of named **factory functions** (v1.1 shape):
 - `piiPatterns.address` — English address factory (alias for `piiPatterns.addressByLocale.en`; retained for v1.0.0 consumer backward-compat).
 - `piiPatterns.addressByLocale.{en,fr,de,it,es,pt}` — per-locale address factories (new in v1.1).
 - `piiPatterns.postcodeByLocale.{uk,fr,de,it,es,pt}` — per-locale bare-postcode factories (new in v1.1).
+- `piiPatterns.phoneByLocale.{fr,de,uk,it,es,pt}` — per-locale phone validator factories (new in v1.1, validator function shape).
+- `piiPatterns.nationalIdByLocale.{uk,fr,it,es,pt}` — per-locale national-ID validator factories (new in v1.1, R10 — validator function shape; check-digit gating where applicable, regex-only for UK NINO).
 - `piiPatterns.phoneInternational`, `piiPatterns.phoneDomestic` — NANP-shape phone factories.
 - `piiPatterns.dob` — DOB factory.
 
-Calling any factory returns a fresh `/g`-flagged `RegExp` on every call (see the "Why factories?" note above for the stateful-`lastIndex` rationale).
+Calling any factory returns a fresh `/g`-flagged `RegExp` on every call (see the "Why factories?" note above for the stateful-`lastIndex` rationale). The `phoneByLocale.*()` and `nationalIdByLocale.*()` factories return a `(candidate: string) => boolean` validator function instead.
 
-Individual factories are also exported by name: `emailPattern`, `addressPattern` (EN), `addressFrPattern`, `addressDePattern`, `addressItPattern`, `addressEsPattern`, `addressPtPattern`, `postcodeUkPattern`, `postcodeFrPattern`, `postcodeDePattern`, `postcodeItPattern`, `postcodeEsPattern`, `postcodePtPattern`, `phoneInternationalPattern`, `phoneDomesticPattern`, `dobPattern`.
+Individual factories are also exported by name: `emailPattern`, `addressPattern` (EN), `addressFrPattern`, `addressDePattern`, `addressItPattern`, `addressEsPattern`, `addressPtPattern`, `postcodeUkPattern`, `postcodeFrPattern`, `postcodeDePattern`, `postcodeItPattern`, `postcodeEsPattern`, `postcodePtPattern`, `phoneInternationalPattern`, `phoneDomesticPattern`, `dobPattern`, `nationalIdUkValidator`, `nationalIdFrValidator`, `nationalIdItValidator`, `nationalIdEsValidator`, `nationalIdPtValidator`, `nationalIdUkExtractionPattern`, `nationalIdFrExtractionPattern`, `nationalIdItExtractionPattern`, `nationalIdEsExtractionPattern`, `nationalIdPtExtractionPattern`, `computeEsDniCheckLetter`, `computePtNifCheckDigit`, `computeFrNirCheckKey`, `computeItCodiceFiscaleCheckLetter`.
 
-Type exports: `PiiPatternName` (top-level `piiPatterns` keys), `AddressLocale` (EN/FR/DE/IT/ES/PT), `PostcodeLocale` (UK/FR/DE/IT/ES/PT).
+Type exports: `PiiPatternName` (top-level `piiPatterns` keys), `AddressLocale` (EN/FR/DE/IT/ES/PT), `PostcodeLocale` (UK/FR/DE/IT/ES/PT), `PhoneLocale` (FR/DE/UK/IT/ES/PT), `NationalIdLocale` (UK/FR/IT/ES/PT).
 
 ### `piiMiddleware: LanguageModelV1Middleware`
 

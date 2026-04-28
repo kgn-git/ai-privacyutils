@@ -6,8 +6,9 @@
  * Complements eslint-plugin-redos by surfacing findings as a dedicated
  * required status check.
  *
- * v1.1 expands the scan from 5 patterns (v1.0.0) to 16 (adds 5 locale
- * address factories + 6 postcode factories per #1 R1 resolution).
+ * v1.1 expands the scan from 5 patterns (v1.0.0) to 21 (adds 5 locale
+ * address factories + 6 postcode factories per #1 R1 resolution, then 5
+ * national-ID extraction factories per #8 R10 resolution).
  *
  * Usage: `npm run redos:scan` or `node scripts/redos-scan.mjs`.
  */
@@ -27,6 +28,11 @@ import {
   postcodeItPattern,
   postcodeEsPattern,
   postcodePtPattern,
+  nationalIdUkExtractionPattern,
+  nationalIdFrExtractionPattern,
+  nationalIdItExtractionPattern,
+  nationalIdEsExtractionPattern,
+  nationalIdPtExtractionPattern,
   phoneInternationalPattern,
   phoneDomesticPattern,
   dobPattern,
@@ -48,6 +54,11 @@ const targets = [
   ['postcodeItPattern', postcodeItPattern()],
   ['postcodeEsPattern', postcodeEsPattern()],
   ['postcodePtPattern', postcodePtPattern()],
+  ['nationalIdUkExtractionPattern', nationalIdUkExtractionPattern()],
+  ['nationalIdFrExtractionPattern', nationalIdFrExtractionPattern()],
+  ['nationalIdItExtractionPattern', nationalIdItExtractionPattern()],
+  ['nationalIdEsExtractionPattern', nationalIdEsExtractionPattern()],
+  ['nationalIdPtExtractionPattern', nationalIdPtExtractionPattern()],
   ['phoneInternationalPattern', phoneInternationalPattern()],
   ['phoneDomesticPattern', phoneDomesticPattern()],
   ['dobPattern', dobPattern()],

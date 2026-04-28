@@ -2,6 +2,12 @@ import { describe, it, expect } from 'vitest';
 
 import { sanitizePii } from '../sanitize-pii.js';
 import { piiMiddleware, createPiiMiddleware } from '../pii-middleware.js';
+import {
+  computeEsDniCheckLetter,
+  computePtNifCheckDigit,
+  computeFrNirCheckKey,
+  computeItCodiceFiscaleCheckLetter,
+} from '../patterns.js';
 import type { TokenFormat } from '../token-format.js';
 
 /**
@@ -53,14 +59,19 @@ describe('sanitizePii — default (readable) is v1.0.0 byte-identical', () => {
   });
 
   it('produces readable tokens across all token types by default', () => {
+    // Extended in v1.2 SD-002 fix-cycle (I2): also covers `[nationalId]`
+    // — UK NINO `AB123456C` — and asserts the sentinel form does NOT leak
+    // into the readable-default output.
     const input =
-      'Contact jane@example.com at 42 Baker Street, SW1A 2AA, born 23.05.1985, phone 555-123-4567.';
+      'Contact jane@example.com at 42 Baker Street, SW1A 2AA, born 23.05.1985, phone 555-123-4567, NINO AB123456C.';
     const out = sanitizePii(input);
     expect(out).toContain('[email]');
     expect(out).toContain('[address]');
     expect(out).toContain('[postcode]');
     expect(out).toContain('[dob]');
     expect(out).toContain('[phone]');
+    expect(out).toContain('[nationalId]');
+    expect(out).not.toContain('<<REDACTED_NATIONALID>>');
     expect(out).not.toContain('REDACTED');
   });
 });
@@ -196,11 +207,41 @@ describe('sanitizePii — idempotency (both formats)', () => {
   });
 
   it('sentinel tokens do not match any redaction pattern when standalone', () => {
+    // Extended in v1.2 SD-002 fix-cycle (I1a): full 6-token sentinel set
+    // including the new <<REDACTED_NATIONALID>> kind (R10 v1.1).
     const sentinels =
-      '<<REDACTED_EMAIL>> <<REDACTED_PHONE>> <<REDACTED_ADDRESS>> <<REDACTED_POSTCODE>> <<REDACTED_DOB>>';
+      '<<REDACTED_EMAIL>> <<REDACTED_PHONE>> <<REDACTED_ADDRESS>> <<REDACTED_POSTCODE>> <<REDACTED_DOB>> <<REDACTED_NATIONALID>>';
     // A second pass in either format must be a strict no-op.
     expect(sanitizePii(sentinels)).toBe(sentinels);
     expect(sanitizePii(sentinels, { tokenFormat: 'sentinel' })).toBe(sentinels);
+  });
+
+  it('sentinel: national-ID tokens survive double-pass (all 5 shapes — UK/FR/IT/ES/PT)', () => {
+    // I1b (SD-002 fix-cycle on PR #36): explicit T4 PreImplReview gate —
+    // proves sanitizePii(sanitizePii(text, sentinel), sentinel) === once
+    // for inputs containing all 5 national-ID shapes. Fixtures are
+    // computed at runtime via the production check-digit algorithms so
+    // each candidate genuinely passes its validator.
+    const esDniBody = '12345678';
+    const esDni = `${esDniBody}${computeEsDniCheckLetter(esDniBody)}`;
+    const ptNifBody = '12345678';
+    const ptNif = `${ptNifBody}${computePtNifCheckDigit(ptNifBody)}`;
+    const frNirBody = '2000000000001';
+    const frNir = `${frNirBody}${computeFrNirCheckKey(frNirBody)}`;
+    const itCfBody = 'RSSMRA85T10A562';
+    const itCf = `${itCfBody}${computeItCodiceFiscaleCheckLetter(itCfBody)}`;
+    const input = [
+      `NINO AB123456C`,
+      `NIR ${frNir}`,
+      `CF ${itCf}`,
+      `DNI ${esDni}`,
+      `NIF ${ptNif}`,
+    ].join(' ');
+    const once = sanitizePii(input, { tokenFormat: 'sentinel' });
+    const twice = sanitizePii(once, { tokenFormat: 'sentinel' });
+    expect(twice).toBe(once);
+    // Sanity: at least one redaction did occur — sentinels present in `once`.
+    expect(once).toContain('<<REDACTED_NATIONALID>>');
   });
 });
 

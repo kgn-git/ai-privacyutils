@@ -577,6 +577,41 @@ export const phoneByLocale = {
   pt: phonePtValidator,
 } as const;
 
+// -----------------------------------------------------------------------
+// National-level identifiers (v1.1 — R10 resolution)
+// -----------------------------------------------------------------------
+//
+// COMPLIANCE: matched substrings MUST NOT be logged. Match counts permitted.
+// Implementation lives in `src/patterns-national-id.ts` (split out per
+// tech-expert finding T5 — file-organisation guidance). Re-exported here
+// to preserve the v1.0.0/v1.1 `patterns.ts` barrel as the single import
+// surface for consumers.
+
+export {
+  // Check-digit / check-letter / check-key pure helpers
+  computeEsDniCheckLetter,
+  computePtNifCheckDigit,
+  computeFrNirCheckKey,
+  computeItCodiceFiscaleCheckLetter,
+  // Validator factories (one per locale)
+  nationalIdUkValidator,
+  nationalIdFrValidator,
+  nationalIdItValidator,
+  nationalIdEsValidator,
+  nationalIdPtValidator,
+  // Per-locale dictionary
+  nationalIdByLocale,
+  // Extraction regex factories used by `sanitizePii` pipeline + redos:scan
+  nationalIdUkExtractionPattern,
+  nationalIdFrExtractionPattern,
+  nationalIdItExtractionPattern,
+  nationalIdEsExtractionPattern,
+  nationalIdPtExtractionPattern,
+} from './patterns-national-id.js';
+export type { NationalIdLocale } from './patterns-national-id.js';
+
+import { nationalIdByLocale } from './patterns-national-id.js';
+
 /**
  * Date of birth (C1 mandatory, new in v1.0.0).
  *
@@ -685,6 +720,7 @@ export const piiPatterns = {
   addressByLocale,
   postcodeByLocale,
   phoneByLocale,
+  nationalIdByLocale,
   phoneInternational: phoneInternationalPattern,
   phoneDomestic: phoneDomesticPattern,
   dob: dobPattern,
@@ -694,3 +730,5 @@ export type PiiPatternName = keyof typeof piiPatterns;
 export type AddressLocale = keyof typeof addressByLocale;
 export type PostcodeLocale = keyof typeof postcodeByLocale;
 export type PhoneLocale = keyof typeof phoneByLocale;
+// `NationalIdLocale` is re-exported from `./patterns-national-id.js` above —
+// local declaration here would conflict with that re-export per TS2484.

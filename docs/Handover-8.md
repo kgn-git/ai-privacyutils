@@ -130,8 +130,8 @@ Rebase performed first to ensure base reflected merged governance PR #35 (`14a45
 - **redos:scan:** ✅ 21 / 21 patterns SAFE (16 baseline + 5 new national-ID extraction patterns; addressIt/addressEs WARN-timeouts pre-existed on baseline before this dispatch)
 - **TDD compliance verifiable in commit history:** ✅ `8dc4858` test(#8) RED precedes `c9ef077` feat(#8) GREEN
 - **Handover written before completion summary:** ✅ this file
-- **Branch pushed to origin:** (pending push at end of dispatch)
-- **PR opened against `main`:** (pending PR creation)
+- **Branch pushed to origin:** ✅ `feature/8-national-ids` @ `6972427`
+- **PR opened against `main`:** ✅ [kgn-git/jobflow-privacyutils#36](https://github.com/kgn-git/jobflow-privacyutils/pull/36)
 
 ## Code Review (left blank by /developer — populated by dispatcher AFTER /developer returns)
 

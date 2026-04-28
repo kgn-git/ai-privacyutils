@@ -266,8 +266,11 @@ export function computeFrNirCheckKey(body: string): string {
 /**
  * FR NIR validator factory.
  *
- * Accepts both compact (`185077505600114`) and space-separated
- * (`1 85 07 75056 001 14`) canonical forms. Rules:
+ * Accepts both compact (15 digits) and space-separated
+ * (`X XX XX XXXXX XXX XX`) canonical forms. Test fixtures use a
+ * synthetic placeholder body — sex=2 / year=00 / dept=00 / commune=000 /
+ * seq=001 — not a real demographic profile (SD-002 review C1 on PR #36).
+ * Rules:
  *
  *   - 13-digit body + 2-digit check key = 15 digits total.
  *   - First digit (sex) must be `1` or `2`. `3..9` and `0` are rejected.

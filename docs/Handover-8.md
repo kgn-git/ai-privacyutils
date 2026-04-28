@@ -76,7 +76,7 @@ Rebase performed first to ensure base reflected merged governance PR #35 (`14a45
 - **FR NIR**
   - Regex shape: `\b[12](?:\s?\d{2}\s?\d{2}\s?\d{5}\s?\d{3}\s?\d{2}|\d{14})\b` (extraction); validator gates first digit `1|2`, mod-97 check key.
   - **mod-97 implementation note:** uses `BigInt` to avoid 15-digit `Number` precision loss. Check key = `97 - (N mod 97)`, zero-padded 2-digit string. Corsica `2A`/`2B` département conversion NOT implemented (documented gap R10-residual).
-  - Fixtures (count: 5): `1850775056001` body + computed key (compact + spaced positives), wrong key, sex prefix `3`/`0` rejected, length 14/16 rejected.
+  - Fixtures (count: 5): `2000000000001` synthetic placeholder body (sex=2 / year=00 / dept=00 / commune=000 / seq=001 — not a real demographic profile, replaced from initial `1850775056001` per SD-002 review C1) + computed key (compact + spaced positives), wrong key, sex prefix `3`/`0` rejected, length 14/16 rejected.
 
 - **IT Codice Fiscale**
   - Regex shape: `\b[A-Z]{6}\d{2}[A-EHLMPRST]\d{2}[A-Z0-9]{4}[A-Z]\b` (extraction).

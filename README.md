@@ -163,7 +163,7 @@ See GDPR Rationale above for the *compliance basis* behind these choices (Art. 4
 | `piiPatterns.phoneDomestic()` | `3-3-4` NANP-shape fallback | `[phone]` |
 | `piiPatterns.dob()` | Numeric `DD.MM.YYYY` / `DD/MM/YYYY` / `DD-MM-YYYY` / `YYYY-MM-DD` + named-month EN/FR/DE/IT/ES/PT | `[dob]` |
 | `piiPatterns.nationalIdByLocale.uk()` | UK NINO validator (regex-only — HMRC invalid-prefix rules + suffix `[A-D]`). Accepts compact `AB123456C` and space-separated `AB 12 34 56 C` forms. | `[nationalId]` |
-| `piiPatterns.nationalIdByLocale.fr()` | French NIR validator (15 digits, sex prefix `1` or `2`, mod-97 check key). Accepts compact `185077505600114` and canonical-spaced `1 85 07 75056 001 14` forms. | `[nationalId]` |
+| `piiPatterns.nationalIdByLocale.fr()` | French NIR validator (15 digits, sex prefix `1` or `2`, mod-97 check key). Accepts compact and canonical-spaced (`X XX XX XXXXX XXX XX`) forms. Examples shown in tests use a synthetic placeholder body (`2000000000001` — sex=2 / year=00 / dept=00 / commune=000 / seq=001 — not a real demographic profile). | `[nationalId]` |
 | `piiPatterns.nationalIdByLocale.it()` | Italian Codice Fiscale validator (16 alphanumeric, position-weighted check letter, `RSSMRA85T10A562X` shape). | `[nationalId]` |
 | `piiPatterns.nationalIdByLocale.es()` | Spanish DNI validator (8 digits + check letter from mod-23 lookup `TRWAGMYFPDXBNJZSQVHLCKE`). | `[nationalId]` |
 | `piiPatterns.nationalIdByLocale.pt()` | Portuguese NIF validator (9 digits, weighted mod-11 check digit). Word-boundary anchored extraction + check-digit gate keeps false-positive rate down on bare 9-digit numerics in CV text. | `[nationalId]` |

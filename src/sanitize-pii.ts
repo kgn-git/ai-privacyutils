@@ -337,8 +337,9 @@ export interface SanitizePiiOptions {
  *              Runs AFTER postcodes (PT NIF's bare 9-digit shape could
  *              otherwise claim the 5-digit portion of a postcode sequence)
  *              and BEFORE DOB (IDs with date-shape digit sequences embedded
- *              — FR NIR's `1850775056001` includes `850775` — are claimed
- *              whole before DOB tries its `DD[./-]MM[./-]YYYY` regex).
+ *              are claimed whole before DOB tries its `DD[./-]MM[./-]YYYY`
+ *              regex — e.g. a 13-digit NIR body could otherwise expose a
+ *              6-digit YYMMDD substring to DOB's pattern).
  *              See `nationalIdByLocale` / `NATIONAL_ID_LOCALES` in
  *              `src/patterns.ts` for the per-locale extraction + validation
  *              contract, and §4.1 of `docs/Handover-8.md` for the

@@ -242,28 +242,33 @@ describe('FR NIR — mod-97 check key validation', () => {
 
   it('computes 2-digit check key per mod-97', () => {
     // Check key = 97 - (13-digit-number mod 97).
-    // For body '1850775056001': compute in-algo.
-    const key = computeFrNirCheckKey('1850775056001');
+    // Synthetic placeholder body — sex=2 / year=00 / month=00 / dept=00 /
+    // commune=000 / seq=001. Not a real demographic profile (dept=00 is
+    // unassigned in the official INSEE département list; month=00 is
+    // outside the spec range, but the validator does not gate on month —
+    // mod-97 alone catches malformed NIRs). SD-002 review C1 on PR #36.
+    const key = computeFrNirCheckKey('2000000000001');
     expect(typeof key).toBe('string');
     expect(key).toMatch(/^\d{2}$/);
   });
 
   it('accepts synthetic NIR with CORRECT check key (compact form)', () => {
-    const body = '1850775056001';
+    const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
     expect(isValidFr(`${body}${key}`)).toBe(true);
   });
 
   it('accepts synthetic NIR with space-separated groups', () => {
-    // Common French formatting: 1 85 07 75056 001 14 (groups separated).
-    const body = '1850775056001';
+    // Spaced canonical form: 2 00 00 00000 001 <key>. Not a real
+    // demographic profile.
+    const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
-    const formatted = `1 85 07 75056 001 ${key}`;
+    const formatted = `2 00 00 00000 001 ${key}`;
     expect(isValidFr(formatted)).toBe(true);
   });
 
   it('rejects NIR with WRONG check key', () => {
-    const body = '1850775056001';
+    const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
     // Flip the check key to something else.
     const wrongKey = key === '00' ? '01' : '00';
@@ -272,13 +277,15 @@ describe('FR NIR — mod-97 check key validation', () => {
 
   it('rejects invalid sex digit (not 1 or 2)', () => {
     // NIR's first digit is 1 (male) or 2 (female). 3-9 are invalid.
-    expect(isValidFr('385077505600114')).toBe(false);
-    expect(isValidFr('085077505600114')).toBe(false);
+    // Bodies use the synthetic placeholder shape (year=00 / month=00 /
+    // dept=00 / commune=000 / seq=001) — not real demographics.
+    expect(isValidFr('300000000000114')).toBe(false);
+    expect(isValidFr('000000000000114')).toBe(false);
   });
 
   it('rejects wrong length', () => {
-    expect(isValidFr('18507750560011')).toBe(false); // 14 digits
-    expect(isValidFr('1850775056001145')).toBe(false); // 16 digits
+    expect(isValidFr('20000000000011')).toBe(false); // 14 digits
+    expect(isValidFr('2000000000001145')).toBe(false); // 16 digits
   });
 });
 
@@ -366,14 +373,14 @@ describe('sanitizePii — redacts national IDs across locales', () => {
   });
 
   it('redacts FR NIR with valid mod-97 check key (compact form)', () => {
-    const body = '1850775056001';
+    const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
     const out = sanitizePii(`NIR: ${body}${key}`);
     expect(out).toContain('[nationalId]');
   });
 
   it('does NOT redact FR NIR with INVALID check key', () => {
-    const body = '1850775056001';
+    const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
     const wrong = key === '00' ? '01' : '00';
     const out = sanitizePii(`NIR: ${body}${wrong}`);
@@ -422,7 +429,7 @@ describe('sanitizePii — pipeline order: national IDs compose with email/phone/
   });
 
   it('redacts FR address + postcode + phone + NIR in mixed input', () => {
-    const body = '1850775056001';
+    const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
     const input = `12 rue de la Paix, 75001 Paris, tel +33 6 12 34 56 78, NIR ${body}${key}`;
     const out = sanitizePii(input);

@@ -1,6 +1,6 @@
 {
   "name": "@kgn-git/privacy-utils",
-  "version": "1.1.0",
+  "version": "1.2.0-dev",
   "description": "Canonical PII-redaction library for the Jobflow programme. Provides sanitizePii, piiPatterns, and a Vercel AI SDK middleware (piiMiddleware) for closing GDPR Art. 5(1)(c)/25/32 gaps on LLM prompt emission.",
   "keywords": [
     "pii",

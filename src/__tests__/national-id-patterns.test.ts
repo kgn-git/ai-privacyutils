@@ -143,6 +143,19 @@ describe('ES DNI — mod-23 check letter validation', () => {
     expect(computeEsDniCheckLetter('00000001')).toBe('R');
   });
 
+  it('computeEsDniCheckLetter rejects non-8-digit body with empty string (security-expert finding S1)', () => {
+    // The exported helper is callable directly by consumers, not just via
+    // the validator wrapper. Per S1 it must guard length + non-digit input
+    // so a short or mixed input does not silently produce a letter (which
+    // a caller might mistake for "valid"). Symmetric with
+    // computePtNifCheckDigit's `-1` sentinel guard.
+    expect(computeEsDniCheckLetter('123')).toBe(''); // too short
+    expect(computeEsDniCheckLetter('1234567A')).toBe(''); // letter in body
+    expect(computeEsDniCheckLetter('123456789')).toBe(''); // too long
+    expect(computeEsDniCheckLetter('')).toBe(''); // empty
+    expect(computeEsDniCheckLetter('1234 678')).toBe(''); // space embedded
+  });
+
   it('accepts synthetic DNI with CORRECT check letter', () => {
     const body = '12345678';
     const check = computeEsDniCheckLetter(body);

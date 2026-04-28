@@ -90,13 +90,15 @@ const ES_DNI_LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE';
 /**
  * Compute the ES DNI check letter for an 8-digit body.
  *
- * Returns a single upper-case letter `'T'..'E'` from the mod-23 table.
- * The caller is responsible for ensuring `body` is exactly 8 digits — on
- * shorter input this will still return a letter (not undefined) because
- * `parseInt` is lenient, but the resulting DNI is structurally invalid
- * and the validator will reject it. Compliance: input is not logged.
+ * Returns a single upper-case letter `'T'..'E'` from the mod-23 table, or
+ * the empty string `''` if `body` is not exactly 8 ASCII digits. The
+ * length+regex guard mirrors `computePtNifCheckDigit`'s `-1` sentinel
+ * (security-expert finding S1, SD-002 review on PR #36) — a short or
+ * mixed-character input must not silently produce a letter that a caller
+ * could mistake for "valid". Compliance: input is not logged.
  */
 export function computeEsDniCheckLetter(body: string): string {
+  if (body.length !== 8 || !/^\d{8}$/.test(body)) return '';
   const n = Number.parseInt(body, 10);
   if (!Number.isFinite(n)) return '';
   return ES_DNI_LETTERS[n % 23] ?? '';

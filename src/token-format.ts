@@ -28,9 +28,11 @@
  * a sentinel token:
  *
  *   - `<<REDACTED_EMAIL>>` contains no `@` — `emailPattern` does not match.
- *   - `<<REDACTED_PHONE>>` / `<<REDACTED_DOB>>` contain no digits —
- *     `phoneInternationalPattern`, `phoneDomesticPattern`, the
- *     libphonenumber-js locale pass, and `dobPattern` all fail to match.
+ *   - `<<REDACTED_PHONE>>` / `<<REDACTED_DOB>>` / `<<REDACTED_NATIONALID>>`
+ *     contain no digits — `phoneInternationalPattern`,
+ *     `phoneDomesticPattern`, the libphonenumber-js locale pass,
+ *     `dobPattern`, and the national-ID extraction regexes (all of which
+ *     require digit-dominant structure) fail to match.
  *   - `<<REDACTED_ADDRESS>>` / `<<REDACTED_POSTCODE>>` do not start with
  *     `\b\d` — the EN/DE/IT/ES/PT address patterns and all postcode
  *     patterns (which all require a leading digit run) cannot match.
@@ -40,6 +42,10 @@
  *   - The strings `REDACTED_EMAIL` / `REDACTED_PHONE` etc. do not match any
  *     address locale's prefix-keyword alternation (`Via|Calle|Rua|Rue|
  *     Hauptstraße` …) — they are not in the closed set.
+ *   - `<<REDACTED_NATIONALID>>` in particular contains no structural
+ *     national-ID shape — no 8-digits+letter (DNI), no 9-digit run (NIF),
+ *     no 15-digit run (NIR), no 16-alphanumeric-with-letter-digit-positional
+ *     shape (Codice Fiscale), no 2-letter-6-digit-letter shape (NINO).
  *
  * Consequence: sanitizePii(sanitizePii(text, { tokenFormat: 'sentinel' }),
  * { tokenFormat: 'sentinel' }) === sanitizePii(text, { tokenFormat:
@@ -88,7 +94,8 @@ export type TokenKind =
   | 'address'
   | 'postcode'
   | 'phone'
-  | 'dob';
+  | 'dob'
+  | 'nationalId';
 
 /**
  * Complete token map per format. Every `TokenKind` is guaranteed to have
@@ -109,6 +116,7 @@ export const TOKEN_FORMATS: Readonly<
     postcode: '[postcode]',
     phone: '[phone]',
     dob: '[dob]',
+    nationalId: '[nationalId]',
   },
   sentinel: {
     email: '<<REDACTED_EMAIL>>',
@@ -116,6 +124,7 @@ export const TOKEN_FORMATS: Readonly<
     postcode: '<<REDACTED_POSTCODE>>',
     phone: '<<REDACTED_PHONE>>',
     dob: '<<REDACTED_DOB>>',
+    nationalId: '<<REDACTED_NATIONALID>>',
   },
 } as const;
 

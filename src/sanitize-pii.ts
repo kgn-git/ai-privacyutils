@@ -1,3 +1,7 @@
+// COMPLIANCE: matched substrings MUST NOT be logged. Match counts permitted.
+// Redaction is destructive / one-way: matched bytes are replaced in the output
+// string and never written to logs, telemetry, or any other side-channel.
+// (GDPR Art. 5(1)(c) data-minimisation, Art. 25 transparency contract.)
 import { findPhoneNumbersInText } from 'libphonenumber-js/min';
 import type { CountryCode } from 'libphonenumber-js/min';
 
@@ -15,6 +19,16 @@ import {
   postcodeItPattern,
   postcodeEsPattern,
   postcodePtPattern,
+  nationalIdUkExtractionPattern,
+  nationalIdFrExtractionPattern,
+  nationalIdItExtractionPattern,
+  nationalIdEsExtractionPattern,
+  nationalIdPtExtractionPattern,
+  nationalIdUkValidator,
+  nationalIdFrValidator,
+  nationalIdItValidator,
+  nationalIdEsValidator,
+  nationalIdPtValidator,
   phoneInternationalPattern,
   phoneDomesticPattern,
   dobPattern,
@@ -163,6 +177,95 @@ function redactLocalePhones(text: string, phoneToken: string): string {
 }
 
 /**
+ * Extract-then-validate redaction for national-level identifiers (R10).
+ *
+ * Each locale contributes:
+ *   - an extraction regex that matches candidate substrings loosely
+ *     (structural shape only — correct digit counts, letter positions);
+ *   - a validator that runs the per-locale check-digit / prefix rules.
+ *
+ * Candidates that pass BOTH regex match AND validator acceptance are
+ * recorded as byte ranges, de-duplicated, and replaced in reverse order
+ * so earlier positions stay stable during splice (identical pattern to
+ * `redactLocalePhones`).
+ *
+ * Order of locale iteration matters only insofar as overlapping extraction
+ * shapes are possible:
+ *
+ *   - UK NINO (2L+6D+1L with optional spaces) — disjoint from everything;
+ *     8+L chars.
+ *   - FR NIR (15 digits compact or canonically spaced `1 85 07 75056 001 14`)
+ *     — distinctive 15-digit run; the canonical spaced form's 1+2+2+5+3+2
+ *     grouping has no overlap with UK NINO's 2+2+2+2+1 letter-digit mix.
+ *   - IT Codice Fiscale — 16 alphanumeric with letter-digit-letter positional
+ *     structure; first two chars are letters (disjoint from FR's leading `1`
+ *     or `2` digit, and from ES/PT/NIF bare digit runs).
+ *   - ES DNI (8 digits + letter) — could be a proper prefix of the
+ *     alphanumeric IT Codice Fiscale. We iterate ES AFTER IT so a full
+ *     16-char CF is claimed before its last 9 chars are claimed as a DNI.
+ *     In practice the `\b` word boundaries on both extraction regexes
+ *     prevent the overlap (DNI's `\b\d{8}[A-Z]\b` requires non-word char
+ *     after, which fails when the letter is followed by more letters/digits
+ *     of a CF), but the iteration order provides belt-and-braces.
+ *   - PT NIF (9 digits) — bare digit run; can be a subsequence of FR NIR
+ *     (15 digits). Iterate PT AFTER FR so the 15-digit NIR is claimed
+ *     whole before the first 9 digits can be stolen as a NIF. Again,
+ *     `\b` boundaries already guarantee this on canonical input, but
+ *     ordering is belt-and-braces.
+ */
+const NATIONAL_ID_LOCALES: ReadonlyArray<{
+  extract: () => RegExp;
+  validate: (candidate: string) => boolean;
+}> = [
+  { extract: nationalIdItExtractionPattern, validate: nationalIdItValidator() },
+  { extract: nationalIdUkExtractionPattern, validate: nationalIdUkValidator() },
+  { extract: nationalIdFrExtractionPattern, validate: nationalIdFrValidator() },
+  { extract: nationalIdEsExtractionPattern, validate: nationalIdEsValidator() },
+  { extract: nationalIdPtExtractionPattern, validate: nationalIdPtValidator() },
+];
+
+function redactNationalIds(text: string, token: string): string {
+  const ranges: Array<{ start: number; end: number }> = [];
+
+  for (const { extract, validate } of NATIONAL_ID_LOCALES) {
+    const re = extract();
+    for (
+      let m: RegExpExecArray | null = re.exec(text);
+      m !== null;
+      m = re.exec(text)
+    ) {
+      const candidate = m[0];
+      if (validate(candidate)) {
+        ranges.push({ start: m.index, end: m.index + candidate.length });
+      }
+      // Guard against zero-width matches (shouldn't happen here — all
+      // extraction regexes have bounded digit/letter segments).
+      if (m.index === re.lastIndex) re.lastIndex += 1;
+    }
+  }
+
+  if (ranges.length === 0) return text;
+
+  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) {
+      if (r.end > last.end) last.end = r.end;
+    } else {
+      merged.push({ ...r });
+    }
+  }
+
+  let out = text;
+  for (let i = merged.length - 1; i >= 0; i -= 1) {
+    const { start, end } = merged[i]!;
+    out = out.slice(0, start) + token + out.slice(end);
+  }
+  return out;
+}
+
+/**
  * Optional configuration for `sanitizePii`.
  *
  * Backward-compat contract: calling `sanitizePii(text)` with no options
@@ -228,7 +331,20 @@ export interface SanitizePiiOptions {
  *              street address. Must run AFTER addresses and BEFORE phone
  *              (5-digit postcodes do not match NANP phone shape; UK/PT
  *              alphanumerics are also disjoint from phone).
- *   4. DOB — runs BEFORE phones in v1.1. v1.0.0 placed DOB last because
+ *   4. national-level IDs (R10 — v1.1) — UK NINO, FR NIR, IT Codice
+ *              Fiscale, ES DNI, PT NIF. Extract-then-validate per locale
+ *              (structural regex + check digit / invalid-prefix rules).
+ *              Runs AFTER postcodes (PT NIF's bare 9-digit shape could
+ *              otherwise claim the 5-digit portion of a postcode sequence)
+ *              and BEFORE DOB (IDs with date-shape digit sequences embedded
+ *              — FR NIR's `1850775056001` includes `850775` — are claimed
+ *              whole before DOB tries its `DD[./-]MM[./-]YYYY` regex).
+ *              See `nationalIdByLocale` / `NATIONAL_ID_LOCALES` in
+ *              `src/patterns.ts` for the per-locale extraction + validation
+ *              contract, and §4.1 of `docs/Handover-8.md` for the
+ *              false-positive analysis (PT NIF accepts ~1/11 random
+ *              9-digit runs — documented residual risk R10-residual).
+ *   5. DOB — runs BEFORE phones in v1.1. v1.0.0 placed DOB last because
  *            the NANP-shape regex could not mis-match date-like `DD.MM.YYYY`
  *            sequences (NANP separators are `.-` between digit runs of
  *            specific shapes that disjoint from DOB's `\d{1,2}[./-]\d{1,2}[./-]\d{2,4}`
@@ -246,7 +362,7 @@ export interface SanitizePiiOptions {
  *                   non-overlapping with any phone shape;
  *              (iii) idempotency is preserved — the `[dob]` / `<<REDACTED_DOB>>`
  *                    token has no digit runs.
- *   5. locale-aware phones (FR/DE/GB/IT/ES/PT via libphonenumber-js) —
+ *   6. locale-aware phones (FR/DE/GB/IT/ES/PT via libphonenumber-js) —
  *              new in v1.1 (R2). Runs BEFORE the NANP-shape fallback to
  *              avoid double-redaction: a FR number like `06 12 34 56 78`
  *              contains a 3-3-4 substring that the NANP regex could
@@ -254,10 +370,10 @@ export interface SanitizePiiOptions {
  *              consumes the full validated number as a single `[phone]`
  *              (or `<<REDACTED_PHONE>>`) token; the NANP pass is then a
  *              no-op on the residual.
- *   6. international phone (NANP-shape fallback) — runs before domestic
+ *   7. international phone (NANP-shape fallback) — runs before domestic
  *              phone so `+44` is not dangled after the domestic pattern
  *              eats the last ten digits.
- *   7. domestic phone — NANP-shape fallback for v1.0.0 backward-compat.
+ *   8. domestic phone — NANP-shape fallback for v1.0.0 backward-compat.
  *
  * The returned string carries token placeholders per the active
  * `tokenFormat` (default `'readable'` — `[email]`, `[address]`,
@@ -316,7 +432,16 @@ export function sanitizePii(
   out = out.replace(postcodeEsPattern(), tokens.postcode);
   out = out.replace(postcodePtPattern(), tokens.postcode);
 
-  // 4. DOB BEFORE phones (v1.1 reorder): libphonenumber-js's
+  // 4. National-level IDs (R10 — v1.1) — UK NINO / FR NIR / IT CF / ES DNI
+  //    / PT NIF. Extract-then-validate: each locale's extraction regex is
+  //    loose on structure only, and the validator applies check-digit /
+  //    invalid-prefix rules. Runs AFTER postcodes (so a 5-digit postcode
+  //    portion is already consumed before PT NIF's bare 9-digit shape
+  //    could claim it as a partial match) and BEFORE DOB (so IDs that
+  //    happen to contain date-shaped digit sequences are taken whole).
+  out = redactNationalIds(out, tokens.nationalId);
+
+  // 5. DOB BEFORE phones (v1.1 reorder): libphonenumber-js's
   //    findPhoneNumbersInText is lenient enough to match date-like digit
   //    sequences (`23.05.1985`, `1985-05-23`) as phone candidates in DE
   //    and other locales. DOB's regex is precise enough that it cannot
@@ -324,10 +449,10 @@ export function sanitizePii(
   //    justification (i)-(iii)).
   out = out.replace(dobPattern(), tokens.dob);
 
-  // 5. Locale-aware phones (FR/DE/GB/IT/ES/PT) BEFORE NANP fallback.
+  // 6. Locale-aware phones (FR/DE/GB/IT/ES/PT) BEFORE NANP fallback.
   out = redactLocalePhones(out, tokens.phone);
 
-  // 6-7. NANP-shape phones — v1.0.0 fallback. international first
+  // 7-8. NANP-shape phones — v1.0.0 fallback. international first
   //      (consumes +CC prefix), then domestic.
   out = out.replace(phoneInternationalPattern(), tokens.phone);
   out = out.replace(phoneDomesticPattern(), tokens.phone);

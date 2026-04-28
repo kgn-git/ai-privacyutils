@@ -36,6 +36,7 @@ export {
   addressByLocale,
   postcodeByLocale,
   phoneByLocale,
+  nationalIdByLocale,
   emailPattern,
   addressPattern,
   addressFrPattern,
@@ -57,6 +58,20 @@ export {
   phoneItValidator,
   phoneEsValidator,
   phonePtValidator,
+  nationalIdUkValidator,
+  nationalIdFrValidator,
+  nationalIdItValidator,
+  nationalIdEsValidator,
+  nationalIdPtValidator,
+  nationalIdUkExtractionPattern,
+  nationalIdFrExtractionPattern,
+  nationalIdItExtractionPattern,
+  nationalIdEsExtractionPattern,
+  nationalIdPtExtractionPattern,
+  computeEsDniCheckLetter,
+  computePtNifCheckDigit,
+  computeFrNirCheckKey,
+  computeItCodiceFiscaleCheckLetter,
   dobPattern,
 } from './patterns.js';
 export type {
@@ -64,6 +79,7 @@ export type {
   AddressLocale,
   PostcodeLocale,
   PhoneLocale,
+  NationalIdLocale,
 } from './patterns.js';
 export { piiMiddleware, createPiiMiddleware } from './pii-middleware.js';
 export type { PiiMiddlewareOptions } from './pii-middleware.js';

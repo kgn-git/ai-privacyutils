@@ -2,7 +2,7 @@
  * @kgn-git/privacy-utils — canonical PII-redaction library for the
  * Jobflow programme.
  *
- * Public API (v1.1):
+ * Public API (v1.2):
  *   - `sanitizePii(text, options?)` — pure string-in/string-out redaction.
  *     `options.tokenFormat` (v1.1 — issue #9): `'readable'` (default, v1.0.0
  *     byte-identical) or `'sentinel'` (`<<REDACTED_X>>` low-collision).
@@ -10,8 +10,11 @@
  *     (default 500_000). Over-cap inputs throw `PiiInputTooLargeError`.
  *   - `piiPatterns` — named factory dictionary for programmatic composition,
  *     now including `addressByLocale` + `postcodeByLocale` + `phoneByLocale`
- *     sub-objects. `phoneByLocale.*()` factories return validator
- *     functions backed by `libphonenumber-js` (not RegExp); the NANP-shape
+ *     + `nationalIdByLocale` (v1.2 — issue #8) sub-objects.
+ *     `phoneByLocale.*()` factories return validator functions backed by
+ *     `libphonenumber-js` (not RegExp); `nationalIdByLocale.*()` factories
+ *     return `(candidate: string) => boolean` validators with embedded
+ *     check-digit / check-letter / HMRC-prefix rules; the NANP-shape
  *     `phoneInternational` / `phoneDomestic` RegExp factories are retained
  *     for backward-compat.
  *   - `piiMiddleware` — Vercel AI SDK middleware (`LanguageModelV1Middleware`).
@@ -23,10 +26,17 @@
  *   - `PiiInputTooLargeError` + `DEFAULT_MAX_INPUT_LENGTH` (v1.1 — issue #10)
  *     — typed error + exported default so consumers can catch and reference
  *     the same cap.
+ *   - `computeEsDniCheckLetter` / `computePtNifCheckDigit` /
+ *     `computeFrNirCheckKey` / `computeItCodiceFiscaleCheckLetter` (v1.2 —
+ *     issue #8) — exported helpers used by the validator factories;
+ *     callable directly for programmatic composition. Each guards on
+ *     length + non-digit input and returns an empty / sentinel value
+ *     when the input is structurally invalid.
  *
  * See README.md for GDPR rationale, SemVer policy, Known Limitations
- * (updated in v1.1 — R1 + R2 + R5 + R8 resolved, R7 hardened), and Security
- * posture (S11 per security review).
+ * (updated in v1.1 — R1 + R2 + R5 + R8 resolved, R7 hardened; v1.2 — R10
+ * resolved for UK/FR/IT/ES/PT, DE deferred), and Security posture (S11
+ * per security review).
  */
 
 export { sanitizePii } from './sanitize-pii.js';

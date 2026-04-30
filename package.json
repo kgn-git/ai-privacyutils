@@ -65,6 +65,7 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
+    "compromise": "~14.15.0",
     "libphonenumber-js": "1.12.41"
   }
 }

@@ -41,6 +41,23 @@
 
 export { sanitizePii } from './sanitize-pii.js';
 export type { SanitizePiiOptions } from './sanitize-pii.js';
+export { sanitizePiiAsync, applyNerRedactions } from './sanitize-pii-async.js';
+export type { SanitizePiiAsyncOptions } from './sanitize-pii-async.js';
+export {
+  createNerEngine,
+  NullNerEngine,
+  CompromiseNerEngine,
+} from './ner/index.js';
+export type {
+  NerConfig,
+  NerEngine,
+  NerSpan,
+  NerDetectOptions,
+} from './ner/index.js';
+export {
+  PiiNerLoadError,
+  DEFAULT_NER_DENY_LIST,
+} from './ner/compromise-ner-engine.js';
 export {
   piiPatterns,
   addressByLocale,

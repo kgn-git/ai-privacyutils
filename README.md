@@ -1,6 +1,6 @@
 # `@kgn-git/privacy-utils`
 
-Canonical PII-redaction library for the Jobflow programme. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`) per compliance review §R8.
+Canonical PII-redaction library for the Jobflow programme. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`) per compliance review §R8. **v1.2 adds opt-in PERSON-name redaction** (`sanitizePiiAsync({ enableNer: true })`) via a heuristic NER engine (`compromise` v14) behind a pluggable `NerEngine` abstraction — closing the largest residual GDPR Art. 5(1)(c) gap on the LLM prompt path (R3, partial — see § Known Limitations).
 
 v1.0.0 ships the first-ever PII redaction on the Jobflow platform's LLM path, closing a pre-existing GDPR Art. 5(1)(c) / 25 / 32 compliance gap. It is consumed by [`jobflow-scoring`](https://github.com/kgn-git/jobflow-scoring) (scoring#82) and [`jobflow-platform`](https://github.com/kgn-git/jobflow-platform) (platform#476).
 
@@ -93,7 +93,57 @@ Sentinel mapping (all 5 token kinds covered):
 
 **Backward-compat contract.** `sanitizePii(text)` with no options — and `piiMiddleware` — produce v1.0.0 byte-identical output. `createPiiMiddleware()` with no options is equivalent to the default `piiMiddleware`. The default swap to sentinel is deferred to v2.0 (major bump).
 
-**Idempotency invariant.** The sentinel strings (`<<REDACTED_*>>`) are structurally pattern-disjoint from every v1.x redaction pattern — no `@`, no digits, no `\b\d` prefix, no lowercase street-type keyword, no closed-set prefix keyword. Running `sanitizePii` twice in either format is a strict no-op; sentinel output sanitised again in readable mode is also a no-op. The ADR + invariant proof lives in `src/token-format.ts`.
+**Idempotency invariant.** The sentinel strings (`<<REDACTED_*>>`) are structurally pattern-disjoint from every v1.x redaction pattern — no `@`, no digits, no `\b\d` prefix, no lowercase street-type keyword, no closed-set prefix keyword. Running `sanitizePii` twice in either format is a strict no-op; sentinel output sanitised again in readable mode is also a no-op. The ADR + invariant proof lives in `src/token-format.ts`. v1.2 (issue #42) extends the invariant to `[person]` / `<<REDACTED_PERSON>>` — see § Async API + NER name redaction below.
+
+### Async API + NER name redaction (v1.2 — issue #42 / R3)
+
+v1.2 adds an async export `sanitizePiiAsync` that applies the v1.1 regex pipeline + (optional) PERSON-name redaction via a heuristic NER engine (`compromise` v14). The sync `sanitizePii` is unchanged — existing v1.0/v1.1 consumers see no behavioural change at the v1.2 minor bump.
+
+**Setting `enableNer: false` (default) means names are NOT redacted. Enable for GDPR Art. 25 compliance when sending text to third-party LLM processors.**
+
+```ts
+import { sanitizePiiAsync } from '@kgn-git/privacy-utils';
+
+// Direct function — opt in to NER:
+const cleaned = await sanitizePiiAsync(rawCv, { enableNer: true });
+// "Hi, Alice Brown applied. Email jane@example.com." →
+// "Hi, [person] applied. Email [email]."
+
+// Sentinel form:
+await sanitizePiiAsync(rawCv, { enableNer: true, tokenFormat: 'sentinel' });
+// → "Hi, <<REDACTED_PERSON>> applied. Email <<REDACTED_EMAIL>>."
+```
+
+> **Note — middleware NER integration is a v1.3 follow-on.** Calling
+> `sanitizePiiAsync` from `createPiiMiddleware`'s `transformParams` (so
+> `createPiiMiddleware({ enableNer: true })` would route prompts through
+> the NER engine before the SDK emits them) is **not** wired in v1.2 —
+> `PiiMiddlewareOptions` does not accept `enableNer` and the middleware
+> never invokes NER. For v1.2, use `sanitizePiiAsync` directly when NER
+> is required.
+
+**Why opt-in (`enableNer: false` default)?** v1.2 is a non-breaking minor bump; existing consumers must continue to see byte-identical behaviour. Platform integration (enabling NER for the consumer-side `sanitizePii` call path) is tracked as a near-term backlog deliverable.
+
+**Engine: `compromise` v14 (heuristic, not ML).** v1.2 uses pure-JS heuristic NER. Two ML engines (transformers.js + distilbert q8 ~221 MB; transformers.js + GLiNER-PII q8 ~333 MB) were evaluated and rejected as exceeding the Vercel 250 MB function-bundle ceiling. `compromise` is ~3.8 MB installed / ~344 KB ESM, zero native bindings, 13-year provenance, 0 known CVEs. The full evaluation history lives in `docs/adr/004-ner-engine-compromise.md`.
+
+**Pluggable engine architecture.** v1.2 ships behind a `NerEngine` abstraction so future engine upgrades (HTTP sidecar, cloud NER, alternative pure-JS engines) are drop-in replacements requiring zero consumer API changes. The ML upgrade is tracked as a formal roadmap commitment — see § Known Limitations R3 and ADR 004.
+
+**Vercel runtime compatibility.**
+- `sanitizePii` (sync, regex-only, the v1.0/v1.1 surface) → Edge-runtime SAFE (no `compromise` in the bundle graph).
+- `sanitizePiiAsync` with `enableNer: false` → Edge-runtime SAFE (compromise loaded only on first detection call via dynamic `import('compromise')`).
+- `sanitizePiiAsync` with `enableNer: true` → Vercel **Serverless** (Node 20+) only. The 344 KB ESM exceeds the 1 MB Edge practical limit when chained with other modules.
+
+**Cohort benchmark — measured TP/FP rates (v1.2, Windows x64 Node 24, 2026-04-30):**
+
+| Cohort | Fixtures | TP rate | Notes |
+|---|---|---|---|
+| 1. Western European (EN/FR/DE/IT/ES/PT names) | 12 | **100.0%** (12/12) | CI BLOCKING gate: ≥70% |
+| 2. Maghrebi (Mohamed, Fatima, Karim, …) | 6 | **100.0%** (6/6) | benchmark only — no CI gate |
+| 3. East Asian transliterated (Wei Zhang, Yuki Tanaka, …) | 6 | **83.3%** (5/6) — miss: `Min Park` | benchmark only |
+| 4. Slavic transliterated (Dmitri Volkov, Jana Novák, …) | 6 | **100.0%** (6/6) | benchmark only |
+| FP rate (companies, universities, tech terms, job titles) | 22 | **4.5%** (1/22) — `IBM Watson` → `Watson` | benchmark only |
+
+The cohort-1 (Western European) gate is enforced as CI BLOCKING; cohorts 2–4 + FP are benchmark + report only at v1.2. The original ≥95% per-cohort / ≤5pp variance AC is carried forward to the ML-upgrade backlog issue (compliance condition C7).
 
 ### Programmatic pattern access
 
@@ -191,7 +241,8 @@ v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/I
 | R1-residual | Address name tokens with apostrophes (e.g. `O'Brien Road`), German multi-word prefix forms (`Unter den Linden 5`, `Am Markt 3`), non-EU locales (NL, BE, SE, …), all-caps headers (`BAKER STREET`), and lowercase UK postcodes in free text are NOT covered. | Medium | Not mitigated | Future — narrow pattern extensions per compliance re-review |
 | R2 | ~~EU-native mobile phone formats (FR `06 12 34 56 78`, DE `030 12345678`, UK `07911 123456`, IT / ES / PT CC-prefixed groupings) systematically under-match the NANP-shape regex.~~ **Resolved in v1.1** via `libphonenumber-js@1.12.41/min` — per-locale `phoneByLocale.{fr,de,uk,it,es,pt}()` validator factories + locale-aware pass in `sanitizePii`. NANP-shape `phoneInternational` / `phoneDomestic` fallbacks retained for backward-compat with v1.0.0 consumers. | High | **Resolved** | v1.1 (this release) |
 | R2-residual | Non-EU locales (US, CA, AU, IN, JP, …) still handled by the NANP-shape fallback only — recall degraded for non-NANP international numbers outside the six EU locales. Very short digit runs without phone formatting (bare `12345678` with no separators, no country code) are intentionally NOT redacted — libphonenumber-js metadata would accept them as valid DE short-codes but this over-redacts SKUs / order-IDs in CV free text. Guard rationale: `PHONE_FORMATTED_RE` heuristic in `sanitize-pii.ts`. | Low | Not mitigated | v1.2 — extend `phoneByLocale` to additional countries based on consumer demand |
-| R3 | Applicant's full name in CV header flows unredacted. Regex is an inappropriate tool (CVs are lists of proper nouns — company names, universities, referees). NER is the right tool. | Medium | Not mitigated | v1.2 — NER-based name redaction (Microsoft Presidio or equivalent) |
+| R3 | ~~Applicant's full name in CV header flows unredacted.~~ **Partially resolved in v1.2** via heuristic NER (`compromise` v14, opt-in via `sanitizePiiAsync({ enableNer: true })`). v1.2 cohort gate is TP ≥70% on Western European (CI blocking); cohorts 2–4 benchmark + report only. The original ≥95% per-cohort gate is carried forward to the ML-upgrade backlog. Two ML engines (transformers.js distilbert / GLiNER-PII) were rejected on Vercel 250 MB bundle ceiling; `compromise` is the agile-pivot pure-JS choice. See § Async API + NER name redaction and ADR 004. | Medium | **Partially resolved (v1.2)** — heuristic baseline, cohort fairness gap acknowledged | ML upgrade — backlog issue carries TP ≥95% per-cohort, ≤5pp variance, ≤5% FP, <60 MB bundle, all CI BLOCKING |
+| R3-residual | Compromise heuristic engine known limitations: (a) names absent from English-centric lexicon (Korean compound truncation `Kim Min-jun` → `Kim Min-`, French surname/Org-tag collisions on `Dupont`/`Petit`/`Laurent` when paired with non-English first name); (b) ALLCAPS headers `JEAN-PIERRE DUBOIS` not detected; (c) `confidenceThreshold` is a no-op for heuristic engines (always returns score: 1.0). | Low | Documented gaps | ML upgrade — drop-in replacement via `NerEngine` abstraction; no consumer API change |
 | R5 | ~~IDN email addresses with non-ASCII local or domain part (`françois@école.fr`, `user@münchen.de`) pass through unredacted.~~ **Resolved in v1.1** via Unicode property escapes (`\p{L}\p{N}`) + `u` flag + negative-lookahead Unicode boundary in `emailPattern()`. IDN local parts (RFC 6531 / SMTPUTF8), IDN domains (RFC 5892 / IDNA 2008), Unicode TLDs (`.中国`), and punycode-encoded (`xn--…`) addresses all redact correctly. Greedy `{2,24}` TLD consumption over-redacts email-shaped Unicode tokens — correct privacy trade-off (see `src/__tests__/idn-email.test.ts`). | Low | **Resolved** | v1.1 (this release) |
 | R7 | ~~ReDoS risk on adversarial input. Static CI lint (`recheck` + `eslint-plugin-redos`) catches known super-linear shapes but can miss novel combinations, especially around Unicode property escapes.~~ **Resolved in v1.1** via runtime input-length cap (`sanitizePii`/`createPiiMiddleware` `{ maxInputLength }`, default `DEFAULT_MAX_INPUT_LENGTH` = 500_000 code units). O(1) gate runs BEFORE any regex; over-cap inputs throw `PiiInputTooLargeError`. See ADR 002 (`docs/adr/002-input-length-cap.md`) and S12 in Security posture. | Medium | **Resolved** | v1.1 (this release) |
 | R10 | ~~National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors.~~ **Resolved in v1.1** for UK/FR/IT/ES/PT via `nationalIdByLocale.{uk,fr,it,es,pt}()` validator factories with check-digit gating (DNI mod-23, NIF mod-11, FR NIR mod-97, IT Codice Fiscale position-weighted check letter); UK NINO regex-only with HMRC invalid-prefix rules. **Member-State framing (Art. 87):** the five identifiers covered are Member-State-issued national identifiers under each respective domestic legal framework — the R10 redaction pass aligns them under the destructive one-way redaction contract. **DE Steuer-ID / Rentenversicherungsnummer deferred to v1.2.** | Medium-Low | **Resolved (UK/FR/IT/ES/PT)** | v1.1 (this release); DE in v1.2 |

@@ -140,13 +140,17 @@ export const DEFAULT_NER_DENY_LIST: ReadonlyArray<string> = Object.freeze([
  * end-computation site to handle the "name ends a sentence" case without
  * eating legitimate dotted name pieces (`Mr.`, `Jr.`, `St.`).
  *
- * **Bounded quantifier rationale.** The binding-constraint form is
- * `/[^\w\s'.-]+$/`. recheck (S5 ReDoS gate) flags the unbounded `+` against
- * a negated character class as 2nd-degree polynomial. Sentence-final
- * trailing punctuation in real CV text is at most a handful of characters
- * (`."`, `?'`, `;)`); the bounded form `{1,16}` covers every realistic
- * case while satisfying the static lint. The semantic outcome on every
- * legitimate input is byte-identical to the unbounded form.
+ * **Bounded quantifier rationale.** Trailing-punct strip — bounded
+ * `{1,16}` instead of unbounded `+` to satisfy the recheck S5 ReDoS gate
+ * (unbounded form flagged 2nd-degree polynomial). Behaviour is
+ * byte-identical to `[^\w\s'.-]+$` for inputs with ≤16 trailing
+ * non-word characters. CV text in production never produces compromise
+ * spans with 17+ trailing punctuation chars in practice — the deviation
+ * is in a tightening direction (fewer chars stripped means more chars
+ * retained in the span end, never the reverse), so the worst-case
+ * failure mode on pathological input is a trailing punctuation
+ * character bleeding into the redacted token (e.g. `[person]!` instead
+ * of `[person]`), which is privacy-safe.
  */
 const TRAILING_PUNCT_RE = /[^\w\s'.-]{1,16}$/;
 

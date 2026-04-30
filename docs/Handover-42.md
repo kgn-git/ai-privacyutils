@@ -164,7 +164,7 @@ Per SD-002 amended 2026-04-15: `/developer` does not invoke code review. The dis
 
 **Why:** the static `recheck` v4.x ReDoS gate (S5 — CI lint) flags the unbounded `+` against a negated character class as 2nd-degree polynomial. Sentence-final trailing punctuation in real CV text is at most a handful of characters (`."`, `?'`, `;)`); the bounded form `{1,16}` covers every realistic case while satisfying the static lint.
 
-**Semantic impact:** byte-identical output on every legitimate input. The bounded form rejects pathological inputs of >16 trailing non-word chars, which compromise's `.people()` would never produce in CV-shaped text.
+**Semantic impact:** behaviour is byte-identical to `[^\w\s'.-]+$` for inputs with ≤16 trailing non-word characters. CV text in production never produces compromise spans with 17+ trailing punctuation chars in practice — the deviation is in a tightening direction (fewer chars stripped means more chars retained in the span end, never the reverse), so the worst-case failure mode on pathological input is a trailing punctuation character bleeding into the redacted token (e.g. `[person]!` instead of `[person]`), which is privacy-safe.
 
 **Documented inline at the regex declaration site** (`src/ner/compromise-ner-engine.ts:142-149`).
 

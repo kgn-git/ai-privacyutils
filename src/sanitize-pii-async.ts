@@ -165,10 +165,14 @@ export function applyNerRedactions(
   if (nerSpans.length === 0) return regexRedacted;
   const merged = mergeSpans(nerSpans);
   let out = regexRedacted;
-  // Process in reverse start order — for symmetry with redactLocalePhones,
-  // and so that earlier matches are unaffected by replacements at later
-  // positions in the output (relevant when a name occurs both before and
-  // after a regex-redacted segment).
+  // Process in reverse start order for symmetry with redactLocalePhones at
+  // sanitize-pii.ts:130-160. Note: this implementation uses indexOf on the
+  // mutating `out` string rather than index-based slicing, so loop direction
+  // does NOT provide an "earlier matches unaffected" guarantee — each
+  // iteration independently locates the first remaining occurrence of the
+  // span text in the already-mutated output. Correctness comes from indexOf
+  // always finding a remaining match if any spans of that text remain
+  // unredacted, NOT from the loop ordering.
   for (let i = merged.length - 1; i >= 0; i -= 1) {
     const range = merged[i]!;
     if (range.start < 0 || range.end > original.length) continue;

@@ -102,7 +102,7 @@ v1.2 adds an async export `sanitizePiiAsync` that applies the v1.1 regex pipelin
 **Setting `enableNer: false` (default) means names are NOT redacted. Enable for GDPR Art. 25 compliance when sending text to third-party LLM processors.**
 
 ```ts
-import { sanitizePiiAsync, createPiiMiddleware } from '@kgn-git/privacy-utils';
+import { sanitizePiiAsync } from '@kgn-git/privacy-utils';
 
 // Direct function — opt in to NER:
 const cleaned = await sanitizePiiAsync(rawCv, { enableNer: true });
@@ -112,11 +112,15 @@ const cleaned = await sanitizePiiAsync(rawCv, { enableNer: true });
 // Sentinel form:
 await sanitizePiiAsync(rawCv, { enableNer: true, tokenFormat: 'sentinel' });
 // → "Hi, <<REDACTED_PERSON>> applied. Email <<REDACTED_EMAIL>>."
-
-// Middleware factory — per-instance:
-const mw = createPiiMiddleware({ enableNer: true });
-// wrapLanguageModel({ model, middleware: mw });
 ```
+
+> **Note — middleware NER integration is a v1.3 follow-on.** Calling
+> `sanitizePiiAsync` from `createPiiMiddleware`'s `transformParams` (so
+> `createPiiMiddleware({ enableNer: true })` would route prompts through
+> the NER engine before the SDK emits them) is **not** wired in v1.2 —
+> `PiiMiddlewareOptions` does not accept `enableNer` and the middleware
+> never invokes NER. For v1.2, use `sanitizePiiAsync` directly when NER
+> is required.
 
 **Why opt-in (`enableNer: false` default)?** v1.2 is a non-breaking minor bump; existing consumers must continue to see byte-identical behaviour. Platform integration (enabling NER for the consumer-side `sanitizePii` call path) is tracked as a near-term backlog deliverable.
 

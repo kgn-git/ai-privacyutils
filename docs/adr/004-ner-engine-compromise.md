@@ -54,7 +54,7 @@ The accuracy delta vs. an ML engine remains: `compromise` will systematically mi
 - `NullNerEngine` — no-op fast path used when `enableNer:false` (default).
 - `CompromiseNerEngine` — `compromise` v14 backed implementation.
 
-Future engines (`HttpNerEngine`, `WinkNerEngine`, `CloudNerEngine`) implement the same interface and slot in via the `createNerEngine(config)` factory or a custom `nerEngine` override on `sanitizePiiAsync`. The consumer API (`sanitizePiiAsync` + `createPiiMiddleware({ enableNer: true })`) does not change as the engine evolves.
+Future engines (`HttpNerEngine`, `WinkNerEngine`, `CloudNerEngine`) implement the same interface and slot in via the `createNerEngine(config)` factory or a custom `nerEngine` override on `sanitizePiiAsync`. The consumer API (`sanitizePiiAsync({ enableNer: true })`) does not change as the engine evolves. Middleware NER integration is deferred to v1.3.
 
 This is the architectural seed for the formal ML upgrade roadmap (§ ML upgrade roadmap below). The interface forecloses the "ship one engine, then refactor everything to ship a second" trap.
 
@@ -164,14 +164,13 @@ Consumer can `catch (err)` and decide whether to retry, fall back, or surface th
 **Chosen.** The v1.2 minor-bump is non-breaking for all existing consumers. Names are NOT redacted by default. To enable redaction:
 
 ```ts
-import { sanitizePiiAsync, createPiiMiddleware } from '@kgn-git/privacy-utils';
+import { sanitizePiiAsync } from '@kgn-git/privacy-utils';
 
 // Direct function:
 const cleaned = await sanitizePiiAsync(rawCv, { enableNer: true });
-
-// Middleware:
-const mw = createPiiMiddleware({ enableNer: true });
 ```
+
+Middleware NER integration (calling `sanitizePiiAsync` from `createPiiMiddleware`'s `transformParams` when `enableNer: true` is supplied via `PiiMiddlewareOptions`) is deferred to v1.3. For v1.2, use `sanitizePiiAsync` directly when NER is required.
 
 Consumer JSDoc (and README) carry an explicit GDPR Art. 25 warning:
 

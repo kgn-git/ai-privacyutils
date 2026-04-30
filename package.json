@@ -66,6 +66,6 @@
   },
   "dependencies": {
     "compromise": "~14.15.0",
-    "libphonenumber-js": "1.12.41"
+    "libphonenumber-js": "1.12.42"
   }
 }

@@ -155,7 +155,9 @@ These are PM gates documented in the issue body AC-8 and in ADR 004 § ML upgrad
   - `45cee85` docs(#42): correct misleading createPiiMiddleware({ enableNer }) example — middleware NER deferred to v1.3 (CR-fix C-1)
   - `cf65ea0` docs(#42): clarify applyNerRedactions reverse-loop semantics — indexOf-based, not index-stable (CR-fix I-1)
   - `aa6215d` docs(#42): clarify {1,16} bounded regex semantic difference for 17+ trailing punct (CR-fix I-2)
-- Re-review: pending
+- Head SHA (after fixes): e3e532861570eb87ba24f99ec15d0b5013f709b
+- Re-review: 2026-04-30 by /project-manager at top-level session — focused inline verification (SD-002 self-review fallback authorised: doc-only fixes matching reviewer's recommended replacement text verbatim; subagent re-review would add no independence value). Verified each fix commit touches only documentation/comment files (45cee85: README + ADR 004; cf65ea0: src/sanitize-pii-async.ts comment-only 8+/4-; aa6215d: src/ner/compromise-ner-engine.ts comment + Handover-42.md), no source-code logic changed, 361/361 tests still passing.
+- Re-review verdict: **Ready to merge**
 
 ---
 

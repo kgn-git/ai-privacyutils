@@ -142,15 +142,20 @@ These are PM gates documented in the issue body AC-8 and in ADR 004 § ML upgrad
 
 ---
 
-## Code Review (left blank by /developer — populated by dispatcher AFTER /developer returns)
+## Code Review
 
-Per SD-002 amended 2026-04-15: `/developer` does not invoke code review. The dispatcher (programme-manager at top-level session) runs `Agent(subagent_type="feature-dev:code-reviewer")` against this branch after `/developer` returns. Self-review fallback was NOT explicitly authorised in the dispatch prompt.
-
-- Verdict: **pending dispatcher review**
-- Critical findings: pending
-- Important findings: pending
-- Minor findings: pending
-- Fix commit(s): pending
+- Reviewer: feature-dev:code-reviewer subagent (dispatched 2026-04-30 by /project-manager at top-level session)
+- Base SHA: 933ba0efefa48a21690bc25f1c4922efffb6167e
+- Head SHA (initial review): 3b30521cbc6a0d8f9511ad5088972026b3ea184f
+- Initial verdict: Fix first
+- Critical findings: 1 — C-1 misleading `createPiiMiddleware({ enableNer })` example (README:117, ADR 004:57+173)
+- Important findings: 2 — I-1 misleading reverse-loop comment (sanitize-pii-async.ts:168-172); I-2 `{1,16}` regex semantic difference clarification
+- Minor findings: 0
+- Fix commits:
+  - `45cee85` docs(#42): correct misleading createPiiMiddleware({ enableNer }) example — middleware NER deferred to v1.3 (CR-fix C-1)
+  - `cf65ea0` docs(#42): clarify applyNerRedactions reverse-loop semantics — indexOf-based, not index-stable (CR-fix I-1)
+  - `aa6215d` docs(#42): clarify {1,16} bounded regex semantic difference for 17+ trailing punct (CR-fix I-2)
+- Re-review: pending
 
 ---
 

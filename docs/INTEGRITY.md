@@ -59,6 +59,10 @@ git -C node_modules/@kgn-git/privacy-utils log --show-signature -1 v1.0.0
 
 The workflow is documented here so consumers can wire it into CI once S3 activates (signal: v1.1 or later release tag emits a signature line; `docs/SIGNING-TAGS.md` is promoted from maintainer-setup runbook to consumer-facing verification guide). Until then it is a no-op and provides no security property.
 
+## v1.2 NER engine — `compromise` lockfile pin (no out-of-band artifact)
+
+v1.2 adds `compromise` v14 + 3 transitive dependencies as runtime dependencies. All four packages are distributed entirely within their npm tarballs — there is no out-of-band asset (model weights, binary blob, CDN-hosted artefact). `package-lock.json`'s `sha512` integrity hash on each tarball is the in-band equivalent of the SHA-256 model-weight pin that the rejected ML approach (ADR 003 / Hybrid C — transformers.js + ONNX) would have required for `dist/models/`. No additional artifact pinning is needed for the v1.2 NER path. See ADR 004 § decision 1 for full engine choice rationale.
+
 ## What is NOT currently provided (explicit)
 
 - **No Sigstore Rekor attestation on the git-install artefact.** Under the git-install architecture there is no published tarball, no `npm publish --provenance`, and therefore no `actions/attest-build-provenance` Sigstore record. GitHub Actions records workflow runs and their commit SHAs — this is auditable via the repository UI and `gh run view` — but is not a cryptographic integrity attestation on a consumer-installed artefact.

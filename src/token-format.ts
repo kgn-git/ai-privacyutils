@@ -46,6 +46,25 @@
  *     national-ID shape — no 8-digits+letter (DNI), no 9-digit run (NIF),
  *     no 15-digit run (NIR), no 16-alphanumeric-with-letter-digit-positional
  *     shape (Codice Fiscale), no 2-letter-6-digit-letter shape (NINO).
+ *   - **`<<REDACTED_PERSON>>` (v1.2 — issue #42)** contains no `@`
+ *     (immune to email pattern); contains no digits (immune to phone /
+ *     DOB / national-ID patterns); does not start with `\b\d` (immune to
+ *     EN/DE/IT/ES/PT address + all postcode patterns); contains no
+ *     lowercase French street-type keyword (`rue`, `avenue`, `place`,
+ *     `boulevard`, `chemin`, `route`) — the entire token uppercases the
+ *     `REDACTED_PERSON` body, where French street-keyword regexes are
+ *     case-sensitive on the lowercase form (see `addressFrPattern`).
+ *     Compromise's PERSON-entity heuristics treat the token as a
+ *     non-name token (snake_case lacking the proper-noun first-letter
+ *     pattern); the engine emits no span on `[person]` or
+ *     `<<REDACTED_PERSON>>` (verified by the cohort benchmark
+ *     fixtures + idempotency test in `src/__tests__/ner-cohort-benchmark.test.ts`
+ *     + `src/__tests__/sanitize-pii-async.test.ts`).
+ *   - The readable form `[person]` is similarly disjoint: no `@`, no
+ *     digits, no leading `\b\d`, no street-type keyword, no proper-noun
+ *     first-letter shape (the bracket character is a non-word boundary
+ *     that compromise tokeniser treats as a sentence boundary, not a
+ *     name component).
  *
  * Consequence: sanitizePii(sanitizePii(text, { tokenFormat: 'sentinel' }),
  * { tokenFormat: 'sentinel' }) === sanitizePii(text, { tokenFormat:

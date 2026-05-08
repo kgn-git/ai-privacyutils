@@ -105,4 +105,19 @@ Round 1 verdict: Fix first (1 Important, 0 Critical, 2 Minor; 1 Minor bundled in
 
 ## Code Review
 
-*SD-002 dispatcher-side review section — to be filled by `/project-manager` after `feature-dev:code-reviewer` runs against this branch. The dispatcher takes review responsibility per SD-002 amended (process-rules.md § Sprint 2F Evolution Constraint). `/developer` does not self-review and does not merge.*
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-05-08 by `/project-manager` at top-level session, per SD-002 amendment / `_shared-context/process-rules.md` § Sprint 2F Evolution Constraint).
+- **Base SHA:** `26639d7fbcadbb05aeb5af548d7a6e8f95d3b772`
+- **Round 1 head SHA:** `7246e993b7ae35c98edb847dc04e95e14f3dbc07`
+- **Final head SHA:** `62fea2bdcdda7666885c07900bc0e6ad02e4f891` (advances one more commit when this handover update lands)
+- **Round 1 verdict:** Fix first
+- **Round 2 (re-review) verdict:** Ready to merge
+- **Critical findings:** 0
+- **Important findings:** 1 (fixed in round 1)
+  - **IMP-1** — `CONTRIBUTING.md` line 1 had `ilth#` corruption prepended to the H1 heading. The file ships to consumers (it's in the `package.json` `files` array) so the corruption was externally visible. Fixed in `ff8255f`: stripped the `ilth` prefix; H1 now reads `# Contributing to \`@kgn-git/privacy-utils\``.
+- **Minor findings:** 2 (1 bundled into the fix-up, 1 not fixed by design)
+  - **MIN-2** (bundled) — `docs/adr/003-ner-engine-choice.md` lines 5, 13, **and 134** referenced "dispatcher-led tech debate", which is internal Claude Code subagent-dispatcher jargon opaque to external readers. Round 1 review identified two occurrences (lines 5, 13); the fix-up dispatch's verification grep surfaced a third at line 134 in the References section. Fixed in `1dce1e4` (lines 5 + 13: `dispatcher-led tech debate` → `design review`) and `6b78ac3` (line 134: `Dispatcher-led tech debate transcript` → `Design review transcript`). Substitutions read grammatically and consistently across all three sites.
+  - **MIN-1** (NOT fixed) — Handover-52.md § "What was implemented" listed 11 feature commits + caveat about a handover-finalise commit; total at PR-open was 12, post-finalisation 13. Reviewer confidence 45; pure bookkeeping discrepancy in an internal handover doc; deemed not worth a follow-up commit.
+- **Fix commits:** `ff8255f` (IMP-1), `1dce1e4` (MIN-2 lines 5+13), `6b78ac3` (MIN-2 line 134), `62fea2b` (handover SD-002 fix-commits section)
+- **Re-review (round 2):** `feature-dev:code-reviewer` re-dispatched 2026-05-08 against the diff `7246e99..62fea2b`. All three IMP-1/MIN-2 sites confirmed fixed; surrounding sentences read grammatically; no collateral damage; diff scope confined to the three expected files (`CONTRIBUTING.md`, `docs/adr/003-ner-engine-choice.md`, `docs/Handover-52.md`). **Ready to merge.**
+
+PR #53 is authorised for merge by the project-manager. Final merge action is the user's call (project rule: PRs require user authorisation).

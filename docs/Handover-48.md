@@ -59,4 +59,20 @@ Round 1 verdict: Fix first (2 Important findings, 0 Critical, 2 Minor pre-existi
 
 ## Code Review
 
-(SD-002 dispatcher-side review section — to be filled by /project-manager after review.)
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-05-08 by `/project-manager` at top-level session, per SD-002 amendment / `_shared-context/process-rules.md` § Sprint 2F Evolution Constraint)
+- **Base SHA:** `17e0928dc13f985bc3e8891ab8a8237e98bec5eb`
+- **Round 1 head SHA:** `40f49297d2615125d19063af247f4ecd26dd8684`
+- **Final head SHA:** `3b98f7aba026ddd18fc2b0ad3365bd742b43235b`
+- **Round 1 verdict:** Fix first
+- **Round 2 (re-review) verdict:** Ready to merge
+- **Critical findings:** 0
+- **Important findings:** 2 (both fixed in round 1)
+  - **I-1** — `README.md` § Security Posture (S11) Kerckhoffs paragraph leaked internal programme jargon (`SD-002`) into a now-public file. Fixed in `a667f3628fcabd3f15acd7fdea4a6e5443ef6b9a`: replaced "SD-002 reviews" with "code reviews".
+  - **I-2** — `CONTRIBUTING.md` § Security reports (line 87) referenced a dead email channel via `docs/SIGNING-TAGS.md` (TBD maintainer table) and conflicted with the canonical channel newly defined in `SECURITY.md`. Fixed in `d0a90ae33e8833324c8c89b36a796c07371f0a9d`: rewrote paragraph to point at `SECURITY.md` as the canonical channel.
+- **Minor findings:** 2 (both pre-existing on `main`; NOT introduced by this PR; filed as follow-up housekeeping issues by `/project-manager`)
+  - **M-1** — `README.md` § SemVer policy line 300: "Every tag cuts from `main` via a signed annotated tag (see S3)" reads as current practice when S3 is deferred.
+  - **M-2** — `README.md` § SemVer policy line 300: "The CHANGELOG records the fixture-level diff for every release" but no `CHANGELOG.md` exists at repo root.
+- **Fix commits:** `a667f362`, `d0a90ae3` (functional fixes); `3b98f7ab` (handover update with fix-commit refs)
+- **Re-review (round 2):** `feature-dev:code-reviewer` re-dispatched 2026-05-08 against the diff `40f4929..3b98f7a`. Both fixes confirmed exact; no collateral edits; no new findings introduced. **Ready to merge.**
+
+PR #50 is authorised for merge by the project-manager. Final merge action is the user's call (project rule: PRs require user authorisation).

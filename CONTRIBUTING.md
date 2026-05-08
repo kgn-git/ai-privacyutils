@@ -1,4 +1,4 @@
-ilth# Contributing to `@kgn-git/privacy-utils`
+# Contributing to `@kgn-git/privacy-utils`
 
 This package is a compliance-critical control on the LLM prompt edge of every consumer LLM call. Contributions are subject to higher scrutiny than typical application code. Please read this document in full before opening a PR.
 

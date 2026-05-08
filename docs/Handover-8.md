@@ -3,7 +3,7 @@
 **Date:** 2026-04-28
 **Branch:** `feature/8-national-ids`
 **Developer:** Claude Code (Opus 4.7 1M)
-**Issue:** [kgn-git/jobflow-privacyutils#8](https://github.com/kgn-git/issues/8) — R10: National-level identifier patterns
+**Issue:** [kgn-git/ai-privacyutils#8](https://github.com/kgn-git/ai-privacyutils/issues/8) — R10: National-level identifier patterns
 
 ---
 
@@ -18,7 +18,7 @@
 | # | Title | Reason |
 |---|-------|--------|
 | — | DE Steuer-ID / Rentenversicherungsnummer | Per issue scope explicitly deferred to v1.2 |
-| — | ROPA / DPIA-pre-screen updates in scoring + platform | Out-of-scope per dispatch preamble — to be filed as separate consumer-side issues at programme level after merge |
+| — | ROPA / DPIA-pre-screen updates in consumer projects | Out-of-scope per dispatch preamble — to be filed as separate consumer-side issues after merge |
 
 ## TDD Compliance
 
@@ -29,11 +29,11 @@
 
 ## Pre-Implementation Expert Reviews (filled from dispatch preamble per SD-009 / Sprint 2K.A audit 2026-04-20)
 
-Four mandatory experts consulted under the utility-package fast-path roster (`jobflow-privacyutils/CLAUDE.md` § Expert Roster). All four return PASS or WARN with no FAIL.
+Four mandatory experts consulted under the utility-package fast-path roster (see `.claude/CLAUDE.md` § Expert Roster). All four return PASS or WARN with no FAIL.
 
 | Expert | Consulted | Verdict | Reference |
 |---|---|---|---|
-| `/compliance-officer` | 2026-04-28 | **WARN — Medium-Low severity refresh** | `jobflow-programme/docs/expert-reviews/PreImplReview-privacyutils-8-2026-04-28.md` (merged via `kgn-git/jobflow-programme` PR #40); GH issue comment [#8 thread](https://github.com/kgn-git/jobflow-privacyutils/issues/8#issuecomment-4333319303) |
+| `/compliance-officer` | 2026-04-28 | **WARN — Medium-Low severity refresh** | Pre-implementation expert review (kept in maintainer's external review archive); GH issue comment [#8 thread](https://github.com/kgn-git/ai-privacyutils/issues/8#issuecomment-4333319303) |
 | `/security-expert` | 2026-04-28 | **PASS** with PT NIF check-digit gate REQUIRED (S3) | same file |
 | `/tech-expert` | 2026-04-28 | **PASS** — validator-factory pattern fit; no ADR | same file |
 | `/tech-ops-expert` | 2026-04-28 | **PASS** — ~600B gz delta; +0.05-0.15ms per call | same file |
@@ -120,7 +120,7 @@ Rebase performed first to ensure base reflected merged governance PR #35 (`14a45
 - [x] Per-locale national-ID patterns (`piiPatterns.nationalIdByLocale.{uk,fr,it,es,pt}()` validator factories)
 - [x] Test fixtures per format (synthetic — 55 tests, all check-digit-computed)
 - [x] Check-digit validation where applicable (DNI mod-23, NIF mod-11, FR NIR mod-97, IT CF position-weighted check letter)
-- [x] Minor bump SemVer (README SemVer table updated; tag-cut as `v1.2.0` per O2 in tech-ops review — actual tagging is a programme-manager step post-merge)
+- [x] Minor bump SemVer (README SemVer table updated; tag-cut as `v1.2.0` per O2 in tech-ops review — actual tagging is a maintainer step post-merge)
 
 ## Reviewable state
 
@@ -134,7 +134,7 @@ Rebase performed first to ensure base reflected merged governance PR #35 (`14a45
   - I1 / I2 / C1 / M1 are doc / fixture / coverage edits with no service-layer behavioural change (SI-001 gate does not apply); the new I1b + I2 tests verify-on-pass against the existing GREEN sentinel-disjointness behaviour, the C1 fixture swap is verified by every existing FR NIR test still passing with the new body, and M1 is a header-comment edit only
 - **Handover written before completion summary:** ✅ this file (post-fix-cycle update at HEAD)
 - **Branch pushed to origin:** ✅ `feature/8-national-ids` @ HEAD (5 new commits on top of original `9a9969f`)
-- **PR opened against `main`:** ✅ [kgn-git/jobflow-privacyutils#36](https://github.com/kgn-git/jobflow-privacyutils/pull/36)
+- **PR opened against `main`:** ✅ [kgn-git/ai-privacyutils#36](https://github.com/kgn-git/ai-privacyutils/pull/36)
 
 ## Code Review (SD-002 cycle — Fix first → Ready to merge after re-review)
 
@@ -192,12 +192,11 @@ Rebase performed first to ensure base reflected merged governance PR #35 (`14a45
 
 ## Out-of-scope (filed as separate issues post-merge)
 
-Per dispatch preamble — separate consumer-side issues to be filed by programme-manager:
-- `kgn-git/jobflow-scoring` — ROPA one-line update for v1.1 R10 redaction coverage; DPIA-pre-screen note confirming no DPIA triggered.
-- `kgn-git/jobflow-platform` — same.
+Per dispatch preamble — separate consumer-side issues to be filed in downstream consumer projects:
+- ROPA one-line update for v1.1 R10 redaction coverage; DPIA-pre-screen note confirming no DPIA triggered.
 
 ## Handover To
 
-→ `/programme-manager` (top-level session scope) for SD-002 dispatcher-level code review via `Agent(subagent_type="feature-dev:code-reviewer")` against the branch.
+→ Maintainer (top-level session scope) for dispatcher-level code review via `Agent(subagent_type="feature-dev:code-reviewer")` against the branch.
 
 After review verdict + any fix commits land, → `/project-manager` for `/sprint-close` and tag-cut to `v1.2.0` per SemVer minor (new locale coverage).

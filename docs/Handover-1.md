@@ -2,9 +2,9 @@
 
 **Date:** 2026-04-19
 **Branch:** `feat/1-r1-locale-aware-addresses`
-**Repo:** `kgn-git/jobflow-privacyutils`
-**Developer:** Claude Code (dispatched by `/programme-manager` via `/developer` at top-level session scope)
-**Dispatch source:** Sprint 2K.A first feature dispatch (retry #2 — prior attempts hit usage-quota / connection-error; clean start on third try inherited partial on-disk work from the first attempt's service-layer RED→GREEN cycle, which this handover completes with middleware integration tests + docs + handover)
+**Repo:** `kgn-git/ai-privacyutils`
+**Developer:** Claude Code (dispatched by the maintainer via `/developer` at top-level session scope)
+**Dispatch source:** first feature dispatch after v1.0.0 (retry #2 — prior attempts hit usage-quota / connection-error; clean start on third try inherited partial on-disk work from the first attempt's service-layer RED→GREEN cycle, which this handover completes with middleware integration tests + docs + handover)
 
 ---
 
@@ -216,7 +216,7 @@ All 16 patterns pass `recheck` v4.x "safe" verdict.
 
 ## Code Review
 
-- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session scope)
+- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by the maintainer at top-level session scope)
 - Base SHA: `origin/main` at review time (post-pivot HEAD — `8e79457` or later)
 - Head SHA at review: `f31a7ef`
 - Verdict: **Ready to merge** (1 Important + 2 Minor; all resolvable pre-tag or as follow-ups)
@@ -332,7 +332,7 @@ every file linearly.
 
 ## Handover To
 
-→ Dispatcher (`/programme-manager` at top-level session scope) for:
+→ Dispatcher (maintainer at top-level session scope) for:
   1. Run `Agent(subagent_type="feature-dev:code-reviewer", ...)` against
      `feat/1-r1-locale-aware-addresses` per SD-002 amended. Populate the
      Code Review section above with findings.

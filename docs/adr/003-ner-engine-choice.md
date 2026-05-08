@@ -2,7 +2,7 @@
 
 **Status:** Accepted (v1.2, Sprint 2K.B target, issue #7)
 **Date:** 2026-04-28
-**Context ref:** Pre-implementation expert review for issue #7 (2026-04-28); compliance review §R3 (v1.0.0, 2026-04-19); dispatcher-led tech debate 2026-04-28 (Presidio vs in-process)
+**Context ref:** Pre-implementation expert review for issue #7 (2026-04-28); compliance review §R3 (v1.0.0, 2026-04-19); design review 2026-04-28 (Presidio vs in-process)
 
 ## Context
 
@@ -10,7 +10,7 @@ Compliance review §R3 flagged that the applicant's full name in the CV header f
 
 The issue body listed three engine candidates: **A** Microsoft Presidio (Python sidecar), **B** transformers.js (Node-runnable BERT-family NER), **C** `compromise` (lightweight JS NLP). Each has different deployment, performance, and accuracy profiles.
 
-A 2026-04-28 dispatcher-led tech debate compared all three under the deployment topology constraint (Vercel serverless Node.js, two internal consumer apps, GDPR-only B2C consumer path, no Python infra). Both opposing positions converged on a **hybrid** recommendation. Hybrid B (cloud NER for PERSON only — Azure / AWS Comprehend) and Hybrid C (transformers.js in-process) were the two viable paths; Hybrid A (Presidio sidecar) was rejected on architecture grounds plus the conclusion that Presidio's strongest forward-looking argument — image PII redaction — is moot for the consumer projects' current scope (verified by code inspection: profile pictures pass through OpenAI moderation only at upload time, never on the LLM-text path; CV downloads embed photos as static DOCX `ImageRun` from object storage).
+A 2026-04-28 design review compared all three under the deployment topology constraint (Vercel serverless Node.js, two internal consumer apps, GDPR-only B2C consumer path, no Python infra). Both opposing positions converged on a **hybrid** recommendation. Hybrid B (cloud NER for PERSON only — Azure / AWS Comprehend) and Hybrid C (transformers.js in-process) were the two viable paths; Hybrid A (Presidio sidecar) was rejected on architecture grounds plus the conclusion that Presidio's strongest forward-looking argument — image PII redaction — is moot for the consumer projects' current scope (verified by code inspection: profile pictures pass through OpenAI moderation only at upload time, never on the LLM-text path; CV downloads embed photos as static DOCX `ImageRun` from object storage).
 
 The user's roadmap signal favoured architecture preservation: stay in-process Node, no new processor relationship, no HTTP boundary. Hybrid C is the architecture-preserving choice and was anticipated as Option B in the original issue body.
 

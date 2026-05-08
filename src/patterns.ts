@@ -1,17 +1,14 @@
 /**
- * Canonical PII regex patterns for Jobflow LLM middleware.
+ * Canonical PII regex patterns for LLM prompt redaction.
  *
- * v1.0.0 patterns are ported byte-equivalent from
- * `jobflow-scoring/src/lib/services/cv-chunker.ts:72-91` where the
- * email / address / international-phone / domestic-phone patterns were
- * originally authored. The DOB pattern is new in v1.0.0 per the C1
- * condition of
- * `jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md`
- * — covers `DD.MM.YYYY`, `DD/MM/YYYY`, `YYYY-MM-DD`, `DD-MM-YYYY`, and
+ * v1.0.0 email / address / international-phone / domestic-phone patterns
+ * originated as ports of earlier internal regex sources; this file is the
+ * canonical source going forward. The DOB pattern is new in v1.0.0 —
+ * covers `DD.MM.YYYY`, `DD/MM/YYYY`, `YYYY-MM-DD`, `DD-MM-YYYY`, and
  * named-month variants across EN/FR/DE/IT/ES/PT.
  *
- * v1.1 adds locale-aware address + postcode + phone coverage per #1 (R1)
- * and #2 (R2) of the compliance review §7. New exports:
+ * v1.1 adds locale-aware address + postcode + phone coverage (residual
+ * gaps R1 + R2 from the v1.0.0 review). New exports:
  *
  *   - `addressByLocale.en()/.fr()/.de()/.it()/.es()/.pt()` — per-locale
  *     structured-address factories. EN is the v1.0.0 pattern preserved

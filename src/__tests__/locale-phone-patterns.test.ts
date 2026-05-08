@@ -7,10 +7,9 @@ import { piiPatterns } from '../patterns.js';
  * Test suite for R2 (EU mobile phone formats via libphonenumber-js) — v1.1
  * additive.
  *
- * Closes the last major recall gap flagged in
- * `jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md`
- * §5.3–5.4 + §7 R2. v1.0.0's two phone regex patterns encode NANP (North
- * American) shapes and under-match native EU mobile formats:
+ * Closes the last major recall gap flagged in the v1.0.0 review: v1.0.0's
+ * two phone regex patterns encode NANP (North American) shapes and
+ * under-match native EU mobile formats:
  *
  *   - FR: `06 12 34 56 78` (2-2-2-2-2 grouping)
  *   - DE: `030 12345678` (3+8 variable)

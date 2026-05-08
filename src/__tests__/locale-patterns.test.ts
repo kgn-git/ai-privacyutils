@@ -6,9 +6,8 @@ import { piiPatterns } from '../patterns.js';
 /**
  * Test suite for R1 (locale-aware postal addresses) — v1.1 additive.
  *
- * Closes the largest single recall gap flagged in
- * `jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md`
- * §5.2 + §7 R1. v1.0.0 was English-only, number-first; v1.1 adds:
+ * Closes the largest single recall gap flagged in the v1.0.0 review:
+ * v1.0.0 was English-only, number-first; v1.1 adds:
  *
  *   - `piiPatterns.addressByLocale.en()/.fr()/.de()/.it()/.es()/.pt()` —
  *     factory functions per locale (IMP-1 consistent — fresh `/g` RegExp on

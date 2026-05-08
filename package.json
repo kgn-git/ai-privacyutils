@@ -11,7 +11,7 @@
     "middleware",
     "jobflow"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": false,
   "type": "module",
   "main": "dist/index.js",

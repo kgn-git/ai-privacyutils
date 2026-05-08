@@ -2,6 +2,15 @@
 
 This package is a compliance-critical control on the LLM prompt edge of every Jobflow LLM call. Contributions are subject to higher scrutiny than typical application code. Please read this document in full before opening a PR.
 
+## External contributions
+
+This package is maintained internally for the Jobflow programme by the
+`kgn-git` team. Issues are enabled but **no SLA is offered** — bug reports
+are welcome but may not be triaged on any specific timeline. Pull requests
+from contributors outside the `kgn-git` org will be closed without review;
+external contributions are not currently accepted. For vulnerability
+reports, see [`SECURITY.md`](SECURITY.md).
+
 ## Local development
 
 ```bash
@@ -58,23 +67,20 @@ Breaking changes are discouraged before v2.0 — prefer adding a parallel patter
 - Every commit references the issue: `feat(#<n>)`, `fix(#<n>)`, `test(#<n>)`, `docs(#<n>)`.
 - Tests land in a RED commit before the GREEN implementation commit (SI-001 per programme process rules).
 - PRs are approved by a reviewer other than the author. The `privacy-utils-maintainers` team is set up in the `kgn-git` org; see `CODEOWNERS`.
-- Never push directly to `main`. The branch is protected.
+- Never push directly to `main` for substantive changes. Branch protection (S1) is currently deferred per the reduced-tier security posture documented in `README.md` § Security Posture; the discipline is solo-maintainer convention, not enforced by GitHub rules. This will tighten if the threat model shifts (see issue #49).
 - Never amend after push (tags are immutable; commits are reviewable history).
 
 ## Releasing
 
 Tags are cut from `main` by a maintainer:
 
-1. Bump `version` in `package.json` to match the tag about to be cut. Commit via PR (`release: v<x>.<y>.<z>`) — signed commit, single-line conventional commit message.
+1. Bump `version` in `package.json` to match the tag about to be cut. Commit via PR (`chore(release): v<x>.<y>.<z>`) — single-line conventional commit message.
 2. After merge: `git checkout main && git pull --ff-only`.
-3. `git tag -s v<x>.<y>.<z> -m "Release v<x>.<y>.<z> — <short change summary>"`. The `-s` flag forces a GPG-signed annotated tag.
-4. `git push origin v<x>.<y>.<z>`. The `publish` workflow triggers and:
-   - verifies the tag signature (`git verify-tag` CI step);
-   - runs the full test + lint + redos-scan suite;
-   - `npm publish --provenance --access restricted` to `npm.pkg.github.com`;
-   - `actions/attest-build-provenance@v2.3.0` attests the `dist/**` artefacts to Sigstore Rekor.
+3. `git tag -a v<x>.<y>.<z> -m "Release v<x>.<y>.<z> — <short change summary>"`. (Annotated tag; GPG signing — `-s` — is deferred per S3 deferred-tier posture documented in `README.md` § Security Posture, with the activation guide retained in `docs/SIGNING-TAGS.md` for when S3 activates.)
+4. `git push origin v<x>.<y>.<z>`.
+5. Consumers bump their `package.json` pin (`"@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v<x>.<y>.<z>"`) and run `npm install` to fetch the new tag and rebuild via the `prepare` lifecycle script.
 
-Maintainer GPG key management and the hardware-token setup guide live in `docs/SIGNING-TAGS.md`.
+There is no npm-registry publish step. The package is git-installable only — see `README.md` § Distribution and `docs/Handover-35.md` § Architecture pivot 2026-04-19 for the rationale. If the package is later promoted to a registry for external distribution, the deleted `publish.yml` workflow can be revived from git history at commit `877b478`.
 
 ## Security reports
 

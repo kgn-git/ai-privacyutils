@@ -84,4 +84,4 @@ There is no npm-registry publish step. The package is git-installable only — s
 
 ## Security reports
 
-Vulnerability reports: open a GitHub Security Advisory on this repo, or email the release maintainer listed in `docs/SIGNING-TAGS.md`. Do NOT open a public issue for undisclosed vulnerabilities.
+Vulnerability reports: see [`SECURITY.md`](SECURITY.md) for the canonical disclosure channel. Do NOT open a public issue for an undisclosed vulnerability.

@@ -8,13 +8,13 @@ Consumer `package.json` MUST pin an exact git ref. Never use `^`, `~`, `>=`, `la
 
 ```json
 // Tag pin (recommended for readability):
-"@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v1.0.0"
+"@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#v1.0.0"
 
 // SHA pin (stricter — see trade-off below):
-"@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#c1a1a2d"
+"@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#c1a1a2d"
 
 // NEVER — floats with the branch and re-resolves on every install:
-// "@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#main"
+// "@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#main"
 ```
 
 npm supports range-like syntax in the git-ref position (e.g. `semver:^1.0.0`), but this package does not publish a registry tarball, so **there is no semver range to resolve** — the `#ref` after the `github:` specifier is what determines the installed code. Range syntax silently resolves to whatever happens to be on `main` and should not be used.
@@ -37,10 +37,10 @@ Both a tag pin and a SHA pin lock to a specific point in history at install time
 The git-install architecture eliminates npm-registry typosquat (see S10) but introduces the symmetric class at the git-URL level. Consumer `package.json` MUST reference the canonical repository URL:
 
 ```
-github:kgn-git/jobflow-privacyutils
+github:kgn-git/ai-privacyutils
 ```
 
-Lookalike owner or repo names (e.g. `kgn-gіt/jobflow-privacyutils` with a homoglyph Cyrillic `і`, or `kgn-git/jobflow-privacy-utils` with an inserted hyphen) would install arbitrary code bearing the same package name. Install-time defences:
+Lookalike owner or repo names (e.g. `kgn-gіt/ai-privacyutils` with a homoglyph Cyrillic `і`, or `kgn-git/ai-privacy-utils` with an inserted hyphen) would install arbitrary code bearing the same package name. Install-time defences:
 
 - Treat the git URL as part of the dependency's trust boundary — review it at code-review time alongside the `#ref`, not only the ref.
 - In consumer CI, pin `GITHUB_TOKEN` to a scope that can only read the canonical repo — a typosquatted URL will 401 rather than silently install attacker code.

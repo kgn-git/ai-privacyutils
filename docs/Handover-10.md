@@ -2,8 +2,8 @@
 
 **Date:** 2026-04-19
 **Branch:** `feature/10-input-length-cap`
-**Developer:** Claude Code (`/developer` skill, dispatched by `/programme-manager`)
-**Milestone:** Sprint 2K.A — v1.1 locale-aware PII + CI hardening
+**Developer:** Claude Code (`/developer` skill, dispatched by the maintainer)
+**Milestone:** v1.1 locale-aware PII + CI hardening
 **Target release:** v1.1 (minor bump — `package.json` already at `1.1.0-dev`)
 **Severity:** medium (compliance review §R7 + security review must-land-before-v1.1 item 4)
 
@@ -65,7 +65,7 @@ The cap is wired on both the pure function (`sanitizePii(text, { maxInputLength?
 
 ## Code Review
 
-- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session)
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by the maintainer at top-level session)
 - **Base SHA:** `d99ee67592ae1b545a9cef89b7118e9ab9e31850`
 - **Head SHA:** `ca4694e` (at dispatch time)
 - **Verdict:** Ready to merge
@@ -179,7 +179,7 @@ None introduced. The `onOverflow: 'throw' | 'truncate'` configurability option i
 
 ## Handover To
 
-Dispatcher (`/programme-manager`) for:
+Dispatcher (maintainer) for:
 
 1. Code review — run `Agent(subagent_type="feature-dev:code-reviewer", ...)` against `feature/10-input-length-cap` at top-level session scope, then populate the `## Code Review` section above with the verdict + findings.
 2. Merge to `main` after review verdict is Ready-to-merge.

@@ -1,6 +1,6 @@
 /**
- * @kgn-git/privacy-utils — canonical PII-redaction library for the
- * Jobflow programme.
+ * @kgn-git/privacy-utils — TypeScript PII-redaction library for LLM
+ * prompts.
  *
  * Public API (v1.2):
  *   - `sanitizePii(text, options?)` — pure string-in/string-out redaction.

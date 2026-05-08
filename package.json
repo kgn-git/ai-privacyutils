@@ -1,15 +1,14 @@
 {
   "name": "@kgn-git/privacy-utils",
   "version": "1.2.0",
-  "description": "Canonical PII-redaction library for the Jobflow programme. Provides sanitizePii, piiPatterns, and a Vercel AI SDK middleware (piiMiddleware) for closing GDPR Art. 5(1)(c)/25/32 gaps on LLM prompt emission.",
+  "description": "TypeScript PII-redaction library for LLM prompts. Pure regex pipeline (email/phone/address/postcode/DOB/national-IDs across 6 EU locales) + opt-in heuristic NER for person names. GDPR Art. 5(1)(c)/25/32 minimisation control via Vercel AI SDK middleware.",
   "keywords": [
     "pii",
     "redaction",
     "gdpr",
     "privacy",
     "ai-sdk",
-    "middleware",
-    "jobflow"
+    "middleware"
   ],
   "license": "MIT",
   "private": false,
@@ -30,12 +29,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kgn-git/jobflow-privacyutils.git"
+    "url": "git+https://github.com/kgn-git/ai-privacyutils.git"
   },
   "bugs": {
-    "url": "https://github.com/kgn-git/jobflow-privacyutils/issues"
+    "url": "https://github.com/kgn-git/ai-privacyutils/issues"
   },
-  "homepage": "https://github.com/kgn-git/jobflow-privacyutils#readme",
+  "homepage": "https://github.com/kgn-git/ai-privacyutils#readme",
   "engines": {
     "node": ">=20"
   },

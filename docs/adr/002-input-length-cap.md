@@ -2,7 +2,7 @@
 
 **Status:** Accepted (v1.1, Sprint 2K.A, issue #10)
 **Date:** 2026-04-19
-**Context ref:** `docs/Handover-10.md`, `jobflow-programme/docs/security-reviews/SecurityReview-2026-04-19-privacy-utils-v1.0.0-hardening.md` §R7
+**Context ref:** `docs/Handover-10.md`; security review §R7 (v1.0.0 hardening, 2026-04-19)
 
 ## Context
 
@@ -24,7 +24,7 @@ A length check `text.length > cap` runs in a single CPU op (string length is a s
 
 Considered alternatives:
 
-- **(a) Middleware-only.** Rejected. `sanitizePii` is the pure function that actually invokes regex. Consumers that call `sanitizePii` directly — scoring's `llm-coverage.service.ts`, platform's upcoming sanitisation hooks — would remain unprotected. The cap must sit on the function that runs the work.
+- **(a) Middleware-only.** Rejected. `sanitizePii` is the pure function that actually invokes regex. Consumers that call `sanitizePii` directly (e.g. service-layer LLM-coverage helpers, ad-hoc sanitisation hooks) would remain unprotected. The cap must sit on the function that runs the work.
 - **(b) Both middleware and `sanitizePii`** (chosen). Length check lives inside `sanitizePii`; the middleware inherits it trivially by threading the option through every internal `sanitizePii` call. Matches the existing `tokenFormat` plumbing (ADR 001) for consistency.
 - **(c) `sanitizePii` only, middleware delegates.** Considered but not sufficient. The middleware still needs `PiiMiddlewareOptions.maxInputLength` on its public signature so consumers can configure the cap per-middleware-instance (cf. per-call for `sanitizePii`).
 
@@ -44,7 +44,7 @@ The error class `PiiInputTooLargeError` is exported from the public API (`src/in
 
 Approximately 500 KB ASCII (or 1-2 MB for UTF-8 with high code-point density, since the cap is on code units not bytes — but worst-case UTF-16 is 2 bytes per code unit, so a 500K code-unit cap is <= 1 MB on-wire). Comfortably above any realistic CV/JD pair:
 
-- Largest CV observed in Jobflow fixtures: ~15 KB (plain text).
+- Largest CV observed in test fixtures: ~15 KB (plain text).
 - Largest JD observed: ~8 KB.
 - Worst-case combined prompt (CV + JD + system + instructions): ~50 KB.
 

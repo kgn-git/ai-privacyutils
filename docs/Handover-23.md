@@ -4,9 +4,9 @@
 **Branch:** `feature/23-tag-cut-prep`
 **Base:** `main` @ `4a89365` (post-#11 PR #31 merge)
 **Developer:** Claude Code
-**Milestone:** Sprint 2K.A: v1.1 locale-aware PII + CI hardening
-**Issue:** [`kgn-git/jobflow-privacyutils#23`](https://github.com/kgn-git/jobflow-privacyutils/issues/23)
-**PR:** [`#32`](https://github.com/kgn-git/jobflow-privacyutils/pull/32)
+**Milestone:** v1.1 locale-aware PII + CI hardening
+**Issue:** [`kgn-git/ai-privacyutils#23`](https://github.com/kgn-git/ai-privacyutils/issues/23)
+**PR:** [`#32`](https://github.com/kgn-git/ai-privacyutils/pull/32)
 
 ---
 
@@ -98,11 +98,11 @@
 - TDD compliance verifiable in commit history: ✅ test-only commit `7663118` precedes docs commit `0b2dfa8`
 - Handover written before completion summary: ✅ `docs/Handover-23.md` (this file)
 - Branch pushed to origin: ✅ `feature/23-tag-cut-prep` @ `0b2dfa8`
-- PR opened against `main`: ✅ [`#32`](https://github.com/kgn-git/jobflow-privacyutils/pull/32)
+- PR opened against `main`: ✅ [`#32`](https://github.com/kgn-git/ai-privacyutils/pull/32)
 
 ## Code Review
 
-- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-20 by `/programme-manager` at top-level session)
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-20 by the maintainer at top-level session)
 - **Base SHA:** `4a89365cbea98bc60659df333d91e6db85a66319` (#11 merge)
 - **Head SHA:** `f0919f9` (at dispatch time)
 - **Verdict:** Ready to merge
@@ -163,5 +163,5 @@
 
 ## Handover To
 
-→ Dispatcher (/programme-manager at top-level session) for code review + PR merge.
-→ Post-merge: `/project-manager` at top-level for sprint-close of #23.
+→ Dispatcher (maintainer at top-level session) for code review + PR merge.
+→ Post-merge: maintainer at top-level for issue close of #23.

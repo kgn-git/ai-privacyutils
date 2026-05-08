@@ -2,8 +2,8 @@
 
 **Date:** 2026-04-19
 **Branch:** `feature/9-token-format`
-**Developer:** Claude Code (`/developer` skill, dispatched by `/programme-manager`)
-**Milestone:** Sprint 2K.A — v1.1 locale-aware PII + CI hardening
+**Developer:** Claude Code (`/developer` skill, dispatched by the maintainer)
+**Milestone:** v1.1 locale-aware PII + CI hardening
 **Target release:** v1.1 (minor bump — `package.json` already at `1.1.0-dev`)
 **Severity:** low (compliance review §R8)
 
@@ -139,7 +139,7 @@ Key correctness claims to verify:
 
 ## Code Review
 
-- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session)
+- **Reviewer:** `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by the maintainer at top-level session)
 - **Base SHA:** `18c88aef2dd59cf6ee92f9cf9c40a1faff2891b8`
 - **Head SHA (pre-fix):** `b207ab114d575a18d05280b710db863bca2f7d0a`
 - **Verdict:** Ready to merge
@@ -168,6 +168,6 @@ Key correctness claims to verify:
 
 ## Handover to
 
-→ `/programme-manager` for SD-002 code review + PR merge coordination.
+→ Maintainer for code review + PR merge coordination.
 
 → After merge, `/project-manager` for `/sprint-close` on issue #9 within Sprint 2K.A.

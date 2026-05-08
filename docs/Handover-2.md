@@ -2,9 +2,9 @@
 
 **Date:** 2026-04-19
 **Branch:** `feat/2-r2-eu-phone-formats`
-**Repo:** `kgn-git/jobflow-privacyutils`
-**Developer:** Claude Code (dispatched by `/programme-manager` via `/developer` subagent)
-**Dispatch source:** Sprint 2K.A second feature dispatch (first feature: #1 closed via PR #24 at commit `9e2b98f`; no cross-repo DEP gates apply; SD-007 clear)
+**Repo:** `kgn-git/ai-privacyutils`
+**Developer:** Claude Code (dispatched via `/developer` subagent)
+**Dispatch source:** second feature dispatch after v1.0.0 (first feature: #1 closed via PR #24 at commit `9e2b98f`; no cross-repo dependency gates apply)
 
 ---
 
@@ -350,7 +350,7 @@ release notes.
 
 ## Code Review
 
-- Reviewer: `/programme-manager` at top-level session scope (2026-04-19). Dispatched `feature-dev:code-reviewer` subagent stalled on the 600s watchdog (PM-003 pattern from Sprint 2J — subagent mid-file-read hang). Review executed inline at top-level reading the diff + handover directly.
+- Reviewer: maintainer at top-level session scope (2026-04-19). Dispatched `feature-dev:code-reviewer` subagent stalled on the 600s watchdog (mid-file-read hang). Review executed inline at top-level reading the diff + handover directly.
 - Base SHA: `origin/main` at review time (post-`9e2b98f` + post-`c77274f` dependabot-policy commit)
 - Head SHA at review: `84ddabc`
 - Verdict: **Ready to merge** (0 Critical + 0 Important + 1 Minor observation for awareness)
@@ -386,7 +386,7 @@ release notes.
     (see § Contract claims verified above).
   - R-51 one-commit-per-issue: commits `5d2881c` + `5d4753d` + upcoming
     docs commits all reference `(#2)` and each has a single scope.
-  - R-54 issue number: verified via `gh issue view 2 --repo kgn-git/jobflow-privacyutils`.
+  - R-54 issue number: verified via `gh issue view 2 --repo kgn-git/ai-privacyutils`.
   - Feature-branch workflow: no commits to main; no `--force`; no `--no-verify`.
   - Git-install adherence: no `publish.yml` reintroduced; no `publishConfig` added.
   - Pinned deps not bumped: `ai@^4.3.19`, `typescript@^5.9.3`,
@@ -400,8 +400,8 @@ release notes.
 - **R2-residual gaps** (documented in README):
   - Non-EU locales (US, CA, AU, IN, JP, …) still handled by NANP-shape
     fallback only. Recall degraded for non-NANP international numbers
-    outside the six supported EU locales. Acceptable because the
-    Jobflow threat model is EU-centric (GDPR remit).
+    outside the six supported EU locales. Acceptable for the package's
+    primary EU-centric threat model (GDPR remit).
   - Bare digit runs without phone formatting (e.g. `12345678` with no
     separators / country code) are intentionally NOT redacted by the
     locale-aware pass — documented precision/recall trade via
@@ -490,9 +490,9 @@ pipeline).
 
 ## Handover To
 
-→ Dispatcher (`/programme-manager` at top-level session scope) for:
+→ Dispatcher (maintainer at top-level session scope) for:
   1. Run `Agent(subagent_type="feature-dev:code-reviewer", ...)` against
-     `feat/2-r2-eu-phone-formats` per SD-002 amended. Populate the
+     `feat/2-r2-eu-phone-formats`. Populate the
      Code Review section above with findings.
   2. Address any review findings (new RED-then-GREEN fix cycle if
      critical/important; minor findings can be addressed in a follow-up PR).

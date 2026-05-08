@@ -1,6 +1,6 @@
 # Signing tags — maintainer setup guide (S3)
 
-Per `jobflow-programme/docs/security-reviews/SecurityReview-2026-04-19-privacy-utils-v1.0.0-hardening.md` §3, every release tag (pattern `v*.*.*`) on this repository MUST be a GPG-signed annotated tag. The signing key MUST live on a hardware token (YubiKey 5 series recommended) — never on disk in plaintext.
+Per the v1.0.0 supply-chain security review §3 (2026-04-19), every release tag (pattern `v*.*.*`) on this repository MUST be a GPG-signed annotated tag. The signing key MUST live on a hardware token (YubiKey 5 series recommended) — never on disk in plaintext.
 
 This runbook is a **manual setup** for the release maintainer. It is not automatable — hardware-token provisioning requires physical interaction.
 
@@ -44,7 +44,7 @@ gpg/card> generate
 # Key expiration: 2 years (then rotate per §4)
 # Real name: <Maintainer Name>
 # Email: <maintainer-email-on-github>
-# Comment: jobflow-privacyutils release key
+# Comment: ai-privacyutils release key
 ```
 
 Verify the key landed on-card, not in the keyring:
@@ -126,6 +126,6 @@ Rotate the signing key every 24 months, or immediately on suspected compromise. 
 
 ## Related documents
 
-- `jobflow-programme/docs/security-reviews/SecurityReview-2026-04-19-privacy-utils-v1.0.0-hardening.md` — full threat model + S3 rationale.
+- v1.0.0 supply-chain security review (2026-04-19) — full threat model + S3 rationale.
 - `CONTRIBUTING.md` § Releasing — caller-side release workflow.
 - `.github/workflows/publish.yml` — CI verification of tag signatures.

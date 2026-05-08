@@ -100,8 +100,8 @@ Commit SHAs will be finalised after the handover commit lands. Base commit on ma
 
 ## Code Review
 
-- **Reviewer:** `/programme-manager` inline at top-level session scope (2026-04-19)
-- **Review mode:** dispatcher-scope inline (SD-002 option b). Full `feature-dev:code-reviewer` subagent dispatch skipped as an authorised exception for this pure-docs change: zero code/test/config files touched, zero regression surface, zero new semantic claims beyond a narrow design-intent restatement. Diff = README.md +14 / -0. Inline review reads the 14 new lines directly against the dispatch acceptance criteria.
+- **Reviewer:** maintainer inline at top-level session scope (2026-04-19)
+- **Review mode:** dispatcher-scope inline. Full `feature-dev:code-reviewer` subagent dispatch skipped as an authorised exception for this pure-docs change: zero code/test/config files touched, zero regression surface, zero new semantic claims beyond a narrow design-intent restatement. Diff = README.md +14 / -0. Inline review reads the 14 new lines directly against the dispatch acceptance criteria.
 - **Base SHA:** `6688a06518c4c5544b5c3f55d8000febd8d797c0`
 - **Head SHA:** `1c64f41` (at dispatch time)
 - **Verdict:** Ready to merge

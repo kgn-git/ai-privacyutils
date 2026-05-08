@@ -194,7 +194,7 @@ export function createPiiMiddleware(
 }
 
 /**
- * `piiMiddleware` — canonical PII scrubber for Jobflow LLM calls.
+ * `piiMiddleware` — canonical PII scrubber for Vercel AI SDK LLM calls.
  *
  * Conforms to `LanguageModelV1Middleware` from the Vercel AI SDK v4.
  * Wires into the prompt path via `transformParams` so every outbound

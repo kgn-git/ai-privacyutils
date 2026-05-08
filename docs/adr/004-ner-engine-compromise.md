@@ -3,7 +3,7 @@
 **Status:** Accepted (v1.2, Sprint 2K.B target, issue #42)
 **Date:** 2026-04-30
 **Supersedes:** ADR 003 § engine choice for the v1.2 implementation. ADR 003 is preserved as the historical record of the rejected Hybrid C (transformers.js / distilbert q8) decision.
-**Context ref:** `jobflow-programme/docs/expert-reviews/PreImplReview-privacyutils-42-2026-04-30.md`, issue #7 closure record (2026-04-28), `docs/Handover-7.md`
+**Context ref:** Pre-implementation expert review for issue #42 (2026-04-30); issue #7 closure record (2026-04-28); `docs/Handover-7.md`
 
 ## Context
 
@@ -25,7 +25,7 @@ A third candidate (Mastra `PIIDetector`) was rejected on architecture grounds:
 |---|---|
 | Mastra PIIDetector | No PERSON / NAME entity type exposed in its detection vocabulary; LLM-backed (introduces a new sub-processor relationship); requires Mastra framework adoption (~adds 50 MB of unrelated framework code) |
 
-With three engine candidates rejected and the v1.2 release on hold, a 2026-04-30 programme-level expert review evaluated `compromise` v14 as a pragmatic agile pivot. `compromise` is a pure-JS heuristic NLP library — ~3.8 MB installed, ~344 KB ESM, zero native bindings, 13-year provenance, 0 known CVEs. The accuracy floor is materially below ML — but the empirically-measured cohort rates against the v1.2 fixture set (see `src/__tests__/ner-cohort-benchmark.test.ts`) substantially outperform the ADR 003 expectation that `compromise` could not meet the ≥95% per-cohort threshold.
+With three engine candidates rejected and the v1.2 release on hold, a 2026-04-30 expert review evaluated `compromise` v14 as a pragmatic agile pivot. `compromise` is a pure-JS heuristic NLP library — ~3.8 MB installed, ~344 KB ESM, zero native bindings, 13-year provenance, 0 known CVEs. The accuracy floor is materially below ML — but the empirically-measured cohort rates against the v1.2 fixture set (see `src/__tests__/ner-cohort-benchmark.test.ts`) substantially outperform the ADR 003 expectation that `compromise` could not meet the ≥95% per-cohort threshold.
 
 The deciding compliance argument is that **the status-quo at v1.0/v1.1 is zero name redaction**. Any positive TP rate is a concrete Art. 5(1)(f) risk reduction. Art. 25 "appropriate technical measures" does not require perfection; it requires proportionate effort given the state of the art, cost, and risk profile. A technically-feasible partial implementation that ships is more defensible than a theoretically-perfect implementation that remains blocked.
 
@@ -265,9 +265,9 @@ The backlog issue captures the AC and engine candidates; this ADR commits to the
 
 - privacyutils#42 — issue body
 - privacyutils#7 — closed (ADR 003 / Hybrid C bundle blocker)
-- `jobflow-programme/docs/expert-reviews/PreImplReview-privacyutils-42-2026-04-30.md` — full per-expert verdicts (compliance / security / tech / tech-ops)
-- `jobflow-programme/docs/expert-reviews/PreImplReview-privacyutils-7-2026-04-28.md` — original Hybrid C review
-- `jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md` §R3 — original compliance flag
+- Pre-implementation expert review for issue #42 (2026-04-30) — full per-expert verdicts (compliance / security / tech / tech-ops)
+- Pre-implementation expert review for issue #7 (2026-04-28) — original Hybrid C review
+- Compliance review §R3 (v1.0.0, 2026-04-19) — original compliance flag
 - `docs/adr/003-ner-engine-choice.md` — superseded engine choice (preserved as historical record)
 - `docs/adr/001-token-format.md` — sentinel idempotency invariant precedent (issue #9)
 - `docs/adr/002-input-length-cap.md` — fail-closed `PiiInputTooLargeError` pattern (issue #10) — `PiiNerLoadError` mirrors this

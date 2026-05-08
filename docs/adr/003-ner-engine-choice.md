@@ -2,7 +2,7 @@
 
 **Status:** Accepted (v1.2, Sprint 2K.B target, issue #7)
 **Date:** 2026-04-28
-**Context ref:** `jobflow-programme/docs/expert-reviews/PreImplReview-privacyutils-7-2026-04-28.md`, `jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md` §R3, programme-manager tech debate 2026-04-28 (Presidio vs privacyutils)
+**Context ref:** Pre-implementation expert review for issue #7 (2026-04-28); compliance review §R3 (v1.0.0, 2026-04-19); design review 2026-04-28 (Presidio vs in-process)
 
 ## Context
 
@@ -10,7 +10,7 @@ Compliance review §R3 flagged that the applicant's full name in the CV header f
 
 The issue body listed three engine candidates: **A** Microsoft Presidio (Python sidecar), **B** transformers.js (Node-runnable BERT-family NER), **C** `compromise` (lightweight JS NLP). Each has different deployment, performance, and accuracy profiles.
 
-A 2026-04-28 programme-manager-led tech debate compared all three under the deployment topology constraint (Vercel serverless Node.js, two consumer apps `jobflow-platform` + `jobflow-scoring`, GDPR-only B2C consumer path, no Python infra). Both opposing positions converged on a **hybrid** recommendation. Hybrid B (cloud NER for PERSON only — Azure / AWS Comprehend) and Hybrid C (transformers.js in-process) were the two viable paths; Hybrid A (Presidio sidecar) was rejected on architecture grounds plus the conclusion that Presidio's strongest forward-looking argument — image PII redaction — is moot for current Jobflow scope (verified by code inspection: profile pictures pass through OpenAI moderation only at upload time, never on the LLM-text path; CV downloads embed photos as static DOCX `ImageRun` from Supabase Storage).
+A 2026-04-28 design review compared all three under the deployment topology constraint (Vercel serverless Node.js, two internal consumer apps, GDPR-only B2C consumer path, no Python infra). Both opposing positions converged on a **hybrid** recommendation. Hybrid B (cloud NER for PERSON only — Azure / AWS Comprehend) and Hybrid C (transformers.js in-process) were the two viable paths; Hybrid A (Presidio sidecar) was rejected on architecture grounds plus the conclusion that Presidio's strongest forward-looking argument — image PII redaction — is moot for the consumer projects' current scope (verified by code inspection: profile pictures pass through OpenAI moderation only at upload time, never on the LLM-text path; CV downloads embed photos as static DOCX `ImageRun` from object storage).
 
 The user's roadmap signal favoured architecture preservation: stay in-process Node, no new processor relationship, no HTTP boundary. Hybrid C is the architecture-preserving choice and was anticipated as Option B in the original issue body.
 
@@ -22,7 +22,7 @@ The user's roadmap signal favoured architecture preservation: stay in-process No
 
 Considered alternatives:
 
-- **(A) Microsoft Presidio sidecar** — rejected. Python-only deployment requires a separate microservice (Cloud Run / Fly / similar), adds 40-100ms typical latency over HTTP, introduces a new ops surface + sub-processor disclosure, and reopens the Sprint 2K.A audit lines (compliance review under new architecture, security review under microservice posture, S1/S2/S3 returning to scope). Image PII redaction — the strongest forward-looking argument — is moot for current Jobflow scope per the 2026-04-28 code inspection.
+- **(A) Microsoft Presidio sidecar** — rejected. Python-only deployment requires a separate microservice (Cloud Run / Fly / similar), adds 40-100ms typical latency over HTTP, introduces a new ops surface + sub-processor disclosure, and reopens the v1.0.0 audit lines (compliance review under new architecture, security review under microservice posture, S1/S2/S3 returning to scope). Image PII redaction — the strongest forward-looking argument — is moot for the consumer projects' current scope per the 2026-04-28 code inspection.
 - **(C) `compromise` JS NLP** — rejected. Accuracy floor on multilingual CVs is below the 95% per-cohort TP threshold the compliance review imposes. Could function as a coarse pre-filter but cannot be the primary detector.
 - **Cloud NER** (Azure Cognitive Services / AWS Comprehend `DetectPiiEntities` for PERSON only) — considered as Hybrid B during the tech debate. Same latency profile as Presidio (~50-150ms intra-region) without the ops surface, but introduces a new Art. 28 processor relationship and ties the package to a specific cloud vendor. Rejected in favour of in-process for architecture purity.
 
@@ -110,7 +110,7 @@ The total LLM round-trip is 800-3000ms (gpt-4o on a CV-sized prompt). 80-120ms o
 ### Risks
 
 - **Model accuracy below threshold on rare cohorts.** Distilbert quantised may underperform on the Maghrebi or East Asian cohorts. Mitigation: cohort:eval CI gate fails the merge; fix is to either (a) switch to `bert-base-multilingual-cased-ner-hrl` non-quantised (+20 MB bundle), or (b) augment the deny-list with cohort-specific tech terms that are over-firing.
-- **Vercel function size limit hit.** Concrete check before tag-cut: `vercel build --debug` on jobflow-platform + jobflow-scoring with the v1.2 pin; if either function approaches 200 MB unzipped, switch to `q4` quantisation OR split the function.
+- **Vercel function size limit hit.** Concrete check before tag-cut: `vercel build --debug` on each consumer project with the v1.2 pin; if either function approaches 200 MB unzipped, switch to `q4` quantisation OR split the function.
 - **`onnxruntime-node` native binding breaks on Vercel.** Verified compatible at writing time; future Vercel runtime changes may break. Mitigation: install-smoke step in privacyutils CI that asserts `await loadModel()` succeeds in a Node test.
 
 ## Rejected alternatives (full enumeration)
@@ -126,10 +126,10 @@ The total LLM round-trip is 800-3000ms (gpt-4o on a CV-sized prompt). 80-120ms o
 ## References
 
 - privacyutils#7 — issue body (lists Options A/B/C as engine candidates)
-- `jobflow-programme/docs/expert-reviews/PreImplReview-privacyutils-7-2026-04-28.md` — full per-expert verdicts (compliance / security / tech / tech-ops)
-- `jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md` §R3 — original compliance flag
+- Pre-implementation expert review for issue #7 (2026-04-28) — full per-expert verdicts (compliance / security / tech / tech-ops)
+- Compliance review §R3 (v1.0.0, 2026-04-19) — original compliance flag
 - `docs/adr/001-token-format.md` — sentinel idempotency invariant precedent (issue #9)
 - `docs/adr/002-input-length-cap.md` — fail-closed `PiiInputTooLargeError` pattern (issue #10) — `PiiNerLoadError` mirrors this
 - `docs/INTEGRITY.md` — reduced-tier security posture (S5/S6/S7/S11 active; S1/S2/S3/S8 deferred); model SHA-256 will be added here at v1.2 tag-cut
-- programme-manager tech debate transcript (synthesis form) 2026-04-28 — Presidio vs privacyutils convergence on hybrid
-- `jobflow-platform/src/lib/services/profile-avatar.service.ts` — image PII out-of-scope verification (OpenAI moderation only at upload, never on LLM-text path)
+- Design review transcript (synthesis form) 2026-04-28 — Presidio vs in-process convergence on hybrid
+- Consumer-side avatar service code — image PII out-of-scope verification (OpenAI moderation only at upload, never on LLM-text path)

@@ -13,7 +13,7 @@
 
 Docs-only change for the re-scoped #11 (original SLSA Level + npm `audit signatures` scope was superseded by the 2026-04-19 git-install pivot; see `docs/Handover-35.md` § Architecture pivot). Added a new standalone file `docs/INTEGRITY.md` (70 lines) containing the consumer-side integrity-verification elaboration under git-install, and inserted a 5-line summary + link into `README.md` between `## Security Posture (S11)` and `## SemVer policy`.
 
-**Why standalone rather than inline in README:** draft content came in at 70 lines (6 subsections: pinning rule, tag vs SHA trade-off, clone-URL verification, future `git log --show-signature`, explicit "not provided" list, future SLSA upgrade path). Dispatch brief's threshold was ">60 lines → spin off to `docs/INTEGRITY.md` and leave a 1-paragraph summary + link." 70 > 60; split honoured. The standalone file also supports future cross-referencing from `jobflow-scoring` and `jobflow-platform` consumer READMEs without duplicating content.
+**Why standalone rather than inline in README:** draft content came in at 70 lines (6 subsections: pinning rule, tag vs SHA trade-off, clone-URL verification, future `git log --show-signature`, explicit "not provided" list, future SLSA upgrade path). Dispatch brief's threshold was ">60 lines → spin off to `docs/INTEGRITY.md` and leave a 1-paragraph summary + link." 70 > 60; split honoured. The standalone file also supports future cross-referencing from consumer READMEs without duplicating content.
 
 **Placement of README summary:** between `## Security Posture (S11)` and `## SemVer policy`. Integrity verification is fundamentally a supply-chain / threat-model companion to Security Posture, not a how-to for using the library — clustering with S11 keeps governance content together (Installation → Usage → Design → Pattern inventory → Known Limitations → Security Posture → **Integrity verification** → SemVer → API reference). The alternative placement between Installation and Usage would have fragmented the threat-model narrative.
 
@@ -60,7 +60,7 @@ No other files changed. `package.json` version remains `1.1.0-dev`.
 - [x] Integrity verification documentation added — `docs/INTEGRITY.md` (70 lines) + `README.md` summary + link (5 lines)
 - [x] Exact-tag pinning required (no `^`, `~`, `main`) documented WITH example — INTEGRITY.md § Pin exact tags, with three `package.json` snippets (tag / SHA / NEVER) including an explicit comment on range syntax
 - [x] Commit-SHA pinning as stricter option, with trade-off — INTEGRITY.md § Tag vs SHA trade-off (comparison table + recommendation paragraph + tag mutability / branch-protection-is-policy-not-protocol note)
-- [x] Clone URL verification paragraph — INTEGRITY.md § Clone URL verification; explicit canonical `github:kgn-git/jobflow-privacyutils`; homoglyph + hyphen-insertion typosquat examples; three install-time defences including CI token scoping and Renovate config validation
+- [x] Clone URL verification paragraph — INTEGRITY.md § Clone URL verification; explicit canonical `github:kgn-git/ai-privacyutils`; homoglyph + hyphen-insertion typosquat examples; three install-time defences including CI token scoping and Renovate config validation
 - [x] Optional `git log --show-signature` workflow for future signed-tag verification — INTEGRITY.md § Future `git log --show-signature` workflow; framed as "currently deferred (S3)", shows the exact command, documents the "no-op until S3 activates" state, cross-refs `docs/SIGNING-TAGS.md`
 - [x] Future SLSA upgrade path documented (single paragraph) — INTEGRITY.md § Future SLSA upgrade path; tarball via GitHub Releases + `actions/attest-build-provenance@v2.3.0`; deleted workflow revival point at `877b478`; explicit "available path, not planned work"; no issue filing / no roadmap commitment
 - [x] `package.json` version unchanged at `1.1.0-dev` (docs-only) — verified
@@ -96,8 +96,8 @@ The focus-area brief required accurate framing of what git-install actually prov
 
 ## Code Review
 
-- **Reviewer:** `/programme-manager` inline at top-level session scope (2026-04-20)
-- **Review mode:** dispatcher-scope inline (SD-002 option b). Full `feature-dev:code-reviewer` subagent dispatch skipped as an authorised exception for this pure-docs change: zero code/test/config touched. Diff = README.md +12 / -1, docs/INTEGRITY.md new +70, docs/Handover-11.md new +156. Dispatcher read the full INTEGRITY.md + README diff inline against the dispatch acceptance criteria and threat-model accuracy checks.
+- **Reviewer:** maintainer inline at top-level session scope (2026-04-20)
+- **Review mode:** dispatcher-scope inline. Full `feature-dev:code-reviewer` subagent dispatch skipped as an authorised exception for this pure-docs change: zero code/test/config touched. Diff = README.md +12 / -1, docs/INTEGRITY.md new +70, docs/Handover-11.md new +156. Dispatcher read the full INTEGRITY.md + README diff inline against the dispatch acceptance criteria and threat-model accuracy checks.
 - **Base SHA:** `c1a1a2d2ad88a44684aaad21b8f57c4b46287877` (#6 merge)
 - **Head SHA (pre-fix):** `e27cd8d3a750c60f5988ce27f59ec62b99ba4dfe`
 - **Verdict:** Ready to merge (after S3 overclaim fix — see IMP-1 below)

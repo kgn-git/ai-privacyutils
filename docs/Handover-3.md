@@ -103,7 +103,7 @@ Conclusion: the perf flake is a pre-existing Windows/vitest cold-start character
 - **Critical findings:** none
 - **Important findings:** 1 (IMP-1, addressed above)
 - **Minor findings:** none
-- **Re-review verdict:** Ready to merge — verified inline at programme-manager top-level (avoided spawning a second reviewer subagent because the fix was pure docs + 1 documenting test with no runtime/regex change; PM-003 stall pattern further motivated staying inline). Diff check: `git diff 4ccc662..fc73e8d` touched only `docs/Handover-3.md` (+14 -10 reflow of §134 narrative) and `src/__tests__/idn-email.test.ts` (+10 lines, one new test exactly matching the prescribed fix).
+- **Re-review verdict:** Ready to merge — verified inline at maintainer top-level (avoided spawning a second reviewer subagent because the fix was pure docs + 1 documenting test with no runtime/regex change; subagent-stall pattern further motivated staying inline). Diff check: `git diff 4ccc662..fc73e8d` touched only `docs/Handover-3.md` (+14 -10 reflow of §134 narrative) and `src/__tests__/idn-email.test.ts` (+10 lines, one new test exactly matching the prescribed fix).
 - **Test delta:** 178 → 179 passing (backward-compat preserved; greedy-consumption test now captures the actual design intent).
 
 ---

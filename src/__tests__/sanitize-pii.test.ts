@@ -11,11 +11,10 @@ import {
 } from '../patterns.js';
 
 /**
- * Test suite for sanitizePii — ports the canonical behaviour from
- * `jobflow-scoring/src/lib/services/cv-chunker.ts:72-91` byte-equivalent
- * and extends it with a C1-mandated DOB pattern covering six EU locales
- * (EN/FR/DE/IT/ES/PT) per the compliance review
- * (`jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md`).
+ * Test suite for sanitizePii — preserves byte-equivalent behaviour
+ * established at v1.0.0 (email / address / international-phone /
+ * domestic-phone) and extends it with a DOB pattern covering six EU
+ * locales (EN/FR/DE/IT/ES/PT).
  *
  * Order of pattern application (MUST be preserved):
  *   email → address → international phone → domestic phone → dob

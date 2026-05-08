@@ -302,11 +302,12 @@ export interface SanitizePiiOptions {
 /**
  * Sanitise PII from arbitrary text.
  *
- * Port of `jobflow-scoring/src/lib/services/cv-chunker.ts:72-91`
- * extended with a DOB pattern per compliance-review condition C1 (v1.0.0),
- * locale-aware address + postcode sets per #1 (v1.1), locale-aware
- * phone validation per #2 (v1.1 — R2 resolution via libphonenumber-js),
- * and an opt-in `tokenFormat` option per #9 (v1.1 — R8 resolution).
+ * Original regex sources used early-stage internal references; this file
+ * is the canonical source going forward. Extended with a DOB pattern
+ * (v1.0.0), locale-aware address + postcode sets (v1.1 — R1 resolution),
+ * locale-aware phone validation (v1.1 — R2 resolution via
+ * libphonenumber-js), and an opt-in `tokenFormat` option (v1.1 — R8
+ * resolution).
  *
  * Order of application matters for idempotency and correctness (see the
  * inline justification in `src/__tests__/sanitize-pii.test.ts`,

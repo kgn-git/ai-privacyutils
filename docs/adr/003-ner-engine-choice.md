@@ -131,5 +131,5 @@ The total LLM round-trip is 800-3000ms (gpt-4o on a CV-sized prompt). 80-120ms o
 - `docs/adr/001-token-format.md` — sentinel idempotency invariant precedent (issue #9)
 - `docs/adr/002-input-length-cap.md` — fail-closed `PiiInputTooLargeError` pattern (issue #10) — `PiiNerLoadError` mirrors this
 - `docs/INTEGRITY.md` — reduced-tier security posture (S5/S6/S7/S11 active; S1/S2/S3/S8 deferred); model SHA-256 will be added here at v1.2 tag-cut
-- Dispatcher-led tech debate transcript (synthesis form) 2026-04-28 — Presidio vs in-process convergence on hybrid
+- Design review transcript (synthesis form) 2026-04-28 — Presidio vs in-process convergence on hybrid
 - Consumer-side avatar service code — image PII out-of-scope verification (OpenAI moderation only at upload, never on LLM-text path)

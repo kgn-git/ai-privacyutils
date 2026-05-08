@@ -92,7 +92,16 @@ A note for transparency, not a deviation: programme references that remain in `.
 - **Branch pushed to origin:** ✅
 - **PR opened against main:** ✅
 - **PR URL:** https://github.com/kgn-git/ai-privacyutils/pull/53
-- **Final HEAD SHA:** *advances by one commit when this handover-finalise commit is pushed; the dispatcher's review covers both the PR-open SHA above and this finalisation commit.*
+- **Final HEAD SHA:** `6b78ac3f7dfe85b9250f1e6101c253363628236c` (after SD-002 round-1 fix commits + this handover update; advances by one commit when the handover-update commit below is pushed).
+
+## SD-002 fix commits
+
+Round 1 verdict: Fix first (1 Important, 0 Critical, 2 Minor; 1 Minor bundled into the fix-up, 1 Minor noted but not blocking).
+
+- IMP-1 fix: `ff8255f` — CONTRIBUTING.md line 1: removed corrupted `ilth` prefix from H1 heading.
+- MIN-2 fix (bundled): `1dce1e4` — ADR 003 lines 5 and 13: replaced "dispatcher-led tech debate" with "design review" (external-reader-friendly neutral phrasing).
+- MIN-2 follow-up: `6b78ac3` — ADR 003 References section line 134: same neutralisation applied to a third occurrence (`Dispatcher-led tech debate transcript` → `Design review transcript`) discovered by the post-edit `git grep -i 'dispatcher-led'` verification step. Dispatch instructions named two occurrences; verification step expected zero matches, so the third occurrence required the same fix to honour the verification gate. Added as a separate commit (no amend) per dispatch instructions.
+- MIN-1 (NOT fixed): handover commit-count bookkeeping — listed 11 feature commits + caveat about handover commits; actual total is 13 (12 feature/handover + 1 finalisation). Reviewer flagged confidence 45; bookkeeping discrepancy in an internal handover doc, not worth blocking.
 
 ## Code Review
 

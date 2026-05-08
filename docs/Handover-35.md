@@ -1,16 +1,15 @@
-# Sprint Handover: programme#35 — `@kgn-git/privacy-utils` v1.0.0
+# Sprint Handover: issue #35 — `@kgn-git/privacy-utils` v1.0.0
 
 **Date:** 2026-04-19
 **Branch:** `feat/35-privacy-utils-v1`
-**Repo:** `kgn-git/jobflow-privacyutils` (newly created)
-**Developer:** Claude Code (dispatched by `/programme-manager` via `/developer` at top-level session scope)
-**Dispatch source:** `ProgrammePlan-2026-04-19-sprint-2k-unified-llm-caches.md` §5.3 Step 0
+**Repo:** `kgn-git/ai-privacyutils` (newly created)
+**Developer:** Claude Code (dispatched via `/developer` at top-level session scope)
 
 ---
 
 ## Scope
 
-First dispatch of Sprint 2K.A. Bootstraps `kgn-git/jobflow-privacyutils` from empty clone, implements the full v1.0.0 public API (`sanitizePii` + `piiPatterns` + `piiMiddleware`), ships docs + CI + supply-chain hardening configs, and leaves the branch in reviewable state for dispatcher-run `feature-dev:code-reviewer`.
+First implementation dispatch for the package. Bootstraps the repo from empty clone, implements the full v1.0.0 public API (`sanitizePii` + `piiPatterns` + `piiMiddleware`), ships docs + CI + supply-chain hardening configs, and leaves the branch in reviewable state for dispatcher-run `feature-dev:code-reviewer`.
 
 **Deferred (not this dispatch):** v1.0.0 tag push — last action after reviews + manual S3/S8/S9. Flagged below under Tag-readiness state.
 
@@ -26,7 +25,7 @@ First dispatch of Sprint 2K.A. Bootstraps `kgn-git/jobflow-privacyutils` from em
 | `507a54a` | docs+ci | README + CONTRIBUTING + CI workflows + hardening configs |
 | (this) | docs | Handover-35.md |
 
-RED-before-GREEN discipline (SI-001) verifiable in commit history: `239eb80` (test-only) precedes `73858db` (implementation). Both commits reference `programme#35`.
+RED-before-GREEN discipline (SI-001) verifiable in commit history: `239eb80` (test-only) precedes `73858db` (implementation). Both commits reference issue #35.
 
 ---
 
@@ -60,30 +59,29 @@ RED-before-GREEN discipline (SI-001) verifiable in commit history: `239eb80` (te
 - [ ] **v1.0.0 tag cut + package visible in GitHub Packages.** DEFERRED to final step after reviews + manual S3/S8/S9 + explicit user authorisation.
 
 ### Supply-chain hardening (S1-S11 from security review)
-- [ ] **S1 — `main` branch protection ruleset.** Config authored at `.github/branch-rulesets/main.json`. `gh api --method POST .../rulesets` attempted at dispatch time → HTTP 403 "Upgrade to GitHub Pro or make this repository public to enable this feature". Classic `branches/main/protection` PUT API also returned same 403. **USER ACTION REQUIRED** — either upgrade the `kgn-git` org to GitHub Pro ($4/user/month) OR make the repo public. Once enabled, apply the ruleset via `gh api --method POST repos/kgn-git/jobflow-privacyutils/rulesets --input .github/branch-rulesets/main.json` or via Settings → Rules → Rulesets → New ruleset. **Blocker for v1.0.0 tag.**
+- [ ] **S1 — `main` branch protection ruleset.** Config authored at `.github/branch-rulesets/main.json`. `gh api --method POST .../rulesets` attempted at dispatch time → HTTP 403 "Upgrade to GitHub Pro or make this repository public to enable this feature". Classic `branches/main/protection` PUT API also returned same 403. **USER ACTION REQUIRED** — either upgrade the `kgn-git` org to GitHub Pro ($4/user/month) OR make the repo public. Once enabled, apply the ruleset via `gh api --method POST repos/kgn-git/ai-privacyutils/rulesets --input .github/branch-rulesets/main.json` or via Settings → Rules → Rulesets → New ruleset. **Blocker for v1.0.0 tag.**
 - [ ] **S2 — Tag ruleset on `v*.*.*`.** Config authored at `.github/branch-rulesets/tags.json`. Same 403 response as S1 — **same USER ACTION required** (GitHub Pro upgrade OR public repo). **Blocker for v1.0.0 tag.**
 - [ ] **S3 — GPG-signed tags.** User-manual per security review §3.1. Runbook authored at `docs/SIGNING-TAGS.md` covering hardware-token provisioning (YubiKey 5 / Ed25519), GitHub key registration, `git config user.signingkey` + `tag.gpgSign true`, and fingerprint recording. **USER ACTION REQUIRED** — generate Ed25519 key on YubiKey, register public key on GitHub, populate `docs/SIGNING-TAGS.md` Release Maintainers table. **Blocker for v1.0.0 tag.**
 - [x] **S4 — npm publish with provenance.** `.github/workflows/publish.yml` uses `npm publish --provenance --access restricted`, `id-token: write` permission, `actions/attest-build-provenance@v2.3.0` (SHA-pinned to `db473fddc028af60658334401dc6fa3ffd8669fd`), all action SHAs pinned. Subject-path is `dist/**` (IMP-6 fix — covers `.d.ts` / `.d.ts.map` / `.js.map` alongside runtime `.js`). Done.
 - [x] **S5 — `recheck` v4.x scanner + `eslint-plugin-redos@^4`.** `scripts/redos-scan.mjs` + `npm run redos:scan` + `redos/no-vulnerable` rule in `eslint.config.js`. Both wired into CI. All 5 regex patterns currently `safe` per `recheck` verdict. Done.
 - [x] **S6 — `dependency-review-action@v4`.** Wired into `.github/workflows/ci.yml` as a required job (PR-only). SHA-pinned. Done.
 - [x] **S7 — Dependabot.** `.github/dependabot.yml` weekly npm + github-actions, no auto-merge, labeled `dependencies` + `security`. Done.
-- [ ] **S8 — Socket.dev GitHub App.** USER ACTION REQUIRED — install from https://github.com/apps/socket-security on `kgn-git/jobflow-privacyutils` (free tier covers unlimited repos). Non-blocking for v1.0.0 tag but should be completed before first external PR.
+- [ ] **S8 — Socket.dev GitHub App.** USER ACTION REQUIRED — install from https://github.com/apps/socket-security on `kgn-git/ai-privacyutils` (free tier covers unlimited repos). Non-blocking for v1.0.0 tag but should be completed before first external PR.
 - [ ] **S9 — GitHub org 2FA enforcement.** USER ACTION REQUIRED — verify at https://github.com/organizations/kgn-git/settings/security. Likely already enabled; this is a verification step. Non-blocking for v1.0.0 tag but should be confirmed.
-- [ ] **S10 — Consumer repo `.npmrc`.** Follow-up issues [scoring#96](https://github.com/kgn-git/jobflow-scoring/issues/96) and [platform#489](https://github.com/kgn-git/jobflow-platform/issues/489) track consumer-side adoption (per dispatch-prompt reference). Non-blocking for v1.0.0 tag but must merge before scoring#82 + platform#476 can consume the published package.
+- [ ] **S10 — Consumer repo `.npmrc`.** Follow-up issues in the consumer projects track consumer-side adoption. Non-blocking for v1.0.0 tag but must merge before consumer projects can consume the published package.
 - [x] **S11 — README Security Posture section.** Documents S1-S10 with rationale + threat model summary.
 
 ### Backlog filing (C3 — pre-close mandatory; not this dispatch)
 
-Per dispatch prompt, Sprint 2K.A backlog issues (#1-#6 in `kgn-git/jobflow-privacyutils` for v1.1 + v1.2 + CI hardening) are a separate programme-manager task referenced in the `ProgrammePlan` §11. NOT within scope of this first dispatch. **USER / programme-manager action** — file before programme#35 closes per C3.
+Per dispatch prompt, backlog issues for v1.1 + v1.2 + CI hardening are a separate dispatcher task. NOT within scope of this first dispatch. **USER action** — file before issue #35 closes per C3.
 
 ### Closure gate (C4 — pre-close mandatory; not this dispatch)
 
-`jobflow-platform#476` consumption PR must merge to platform `main`. Not within `/developer` scope; tracked in DEP-013. programme#35 does not close until C4 clears.
+A downstream consumer-project consumption PR must merge to its respective `main` branch. Not within `/developer` scope. Issue #35 does not close until C4 clears.
 
 ### RoPA updates (deferred)
 
-- `jobflow-scoring/docs/compliance/ropa.md` middleware-note: tracked as follow-up per `ProgrammePlan` F-15. Not this dispatch.
-- Platform-side RoPA entry: tracked as `platform#488` per `ProgrammePlan` F-14. Not this dispatch.
+- Consumer-side RoPA middleware-note: tracked as follow-up by the consumer projects. Not this dispatch.
 
 ---
 
@@ -91,7 +89,7 @@ Per dispatch prompt, Sprint 2K.A backlog issues (#1-#6 in `kgn-git/jobflow-priva
 
 ### `emailPattern` — ReDoS hardening required
 
-**Issue:** the canonical regex at `jobflow-scoring/src/lib/services/cv-chunker.ts:76` (`/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g`) is a 3rd-degree polynomial per `recheck` v4.x (attack: `-@A.A.A.-.-.A` + `.A.A.-` × n). Preserving byte-equivalent behaviour would fail S5 (ReDoS scan must be `safe`).
+**Issue:** the original-source regex (`/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g`) is a 3rd-degree polynomial per `recheck` v4.x (attack: `-@A.A.A.-.-.A` + `.A.A.-` × n). Preserving byte-equivalent behaviour would fail S5 (ReDoS scan must be `safe`).
 
 **Resolution:** rewrote `emailPattern` with a negative lookbehind anchor on the local part and bounded label quantifiers. The new pattern preserves all canonical test-fixture behaviour (every fixture from `cv-chunker.test.ts` passes) but eliminates the polynomial. Full commit message on `73858db` documents the rewrite.
 
@@ -134,7 +132,7 @@ The publish workflow is pinned (by SHA) to `actions/attest-build-provenance@v2.3
 
 ### Initial review (2026-04-19)
 
-- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session scope)
+- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 at top-level session scope)
 - Base SHA: `a810538`
 - Head SHA: `0cc6826`
 - Verdict: **Fix first**
@@ -157,7 +155,7 @@ The publish workflow is pinned (by SHA) to `actions/attest-build-provenance@v2.3
 
 ### Re-review (2026-04-19)
 
-- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 by `/programme-manager` at top-level session scope)
+- Reviewer: `feature-dev:code-reviewer` subagent (dispatched 2026-04-19 at top-level session scope)
 - Fix delta range: `0cc6826..b034d62` (5 fix commits) + `933e82b` CLAUDE.md factory-function docstring patch at top-level
 - Verdict: **Ready to merge**
 - Critical findings (re-review): 0
@@ -184,7 +182,7 @@ PR #16 merged at commit `680127e` on 2026-04-19 per user authorisation.
 
 ## Security Posture Decision — 2026-04-19 (reduced tier, solo-private-internal)
 
-User decision 2026-04-19: reduced hardening tier appropriate to the solo-private-internal threat model. S1-S11 from the `/security-expert` review were scoped for a generic production-grade supply-chain threat model; this package's actual context (solo-operator `kgn-git` org, private repo, private GitHub Packages registry, internal consumers `jobflow-scoring` + `jobflow-platform` only) warrants a reduced tier.
+User decision 2026-04-19: reduced hardening tier appropriate to the solo-private-internal threat model. S1-S11 from the `/security-expert` review were scoped for a generic production-grade supply-chain threat model; this package's actual context (solo-operator `kgn-git` org, private repo, private GitHub Packages registry, two internal consumer projects only) warrants a reduced tier.
 
 **Kept (in v1.0.0):**
 
@@ -192,7 +190,7 @@ User decision 2026-04-19: reduced hardening tier appropriate to the solo-private
 - **S5** `recheck` v4.x ReDoS CI lint (automated in `ci.yml`)
 - **S6** `dependency-review-action@v4` (automated in `ci.yml`)
 - **S7** Dependabot (automated via `.github/dependabot.yml`)
-- **S10** Consumer `.npmrc` scope pin — filed as [jobflow-scoring#96](https://github.com/kgn-git/jobflow-scoring/issues/96) + [jobflow-platform#489](https://github.com/kgn-git/jobflow-platform/issues/489); cross-repo work
+- **S10** Consumer `.npmrc` scope pin — tracked as cross-repo follow-up in the consumer projects
 - **S11** README Security Posture section (authored in `README.md`)
 
 **Deferred — upgrade path preserved:**
@@ -209,7 +207,7 @@ User decision 2026-04-19: reduced hardening tier appropriate to the solo-private
 **Re-upgrade triggers (revisit deferred items if any of these occur):**
 
 - `kgn-git` org grows beyond solo operator → apply S1 + S9 (enforce 2FA on all members)
-- External consumers onboarded beyond `jobflow-scoring` + `jobflow-platform` → apply S1/S2/S3 for audit trail
+- External consumers onboarded beyond the two original internal consumer projects → apply S1/S2/S3 for audit trail
 - Compliance audit requirement emerges (investor due-diligence, regulatory review, etc.) → apply S3 for tag-level audit
 - Socket.dev becomes readily available or free tier fits → apply S8 (zero-cost defence-in-depth)
 
@@ -219,9 +217,9 @@ User decision 2026-04-19: reduced hardening tier appropriate to the solo-private
 
 ## Architecture pivot 2026-04-19 — git-install pattern adopted
 
-**Context:** User decision 2026-04-19 after 3 consecutive npm-publish workflow failures (GPG-gate, --provenance-incompatibility, coverage-threshold incidentals). For solo-private-internal use with only `jobflow-scoring` + `jobflow-platform` as consumers, the npm registry publish path was overkill.
+**Context:** User decision 2026-04-19 after 3 consecutive npm-publish workflow failures (GPG-gate, --provenance-incompatibility, coverage-threshold incidentals). For solo-private-internal use with only the two internal consumer projects, the npm registry publish path was overkill.
 
-**New architecture:** consumers install directly from git via `github:kgn-git/jobflow-privacyutils#v1.0.0`. A `prepare` lifecycle script in `package.json` builds `dist/` on install. No npm registry; no `.npmrc` auth ceremony; no publish workflow.
+**New architecture:** consumers install directly from git via `github:kgn-git/ai-privacyutils#v1.0.0`. A `prepare` lifecycle script in `package.json` builds `dist/` on install. No npm registry; no `.npmrc` auth ceremony; no publish workflow.
 
 **Changes applied:**
 
@@ -248,7 +246,7 @@ User decision 2026-04-19: reduced hardening tier appropriate to the solo-private
 
 **Upgrade path:** if the package later needs to go on a registry (e.g. for external distribution), revive `publish.yml` from git history at commit `877b478` and restore `publishConfig` in `package.json`. The `prepare` script stays compatible either way.
 
-**C4 closure gate (unchanged):** programme#35 still closes only after `jobflow-platform#476` consumes v1.0.0 and the consumption PR merges to platform `main`. Under git-install, "consume" means "add the git-ref dependency line to `package.json`".
+**C4 closure gate (unchanged):** issue #35 still closes only after a consumer project consumes v1.0.0 and the consumption PR merges to its respective `main`. Under git-install, "consume" means "add the git-ref dependency line to `package.json`".
 
 ---
 
@@ -263,9 +261,9 @@ The following MUST complete before the tag `v1.0.0` can be safely pushed. Ordere
    - **Option B:** make the repo public (not recommended — the repo is infrastructure but does not need to be public).
    - After either option, apply:
      ```bash
-     gh api --method POST repos/kgn-git/jobflow-privacyutils/rulesets \
+     gh api --method POST repos/kgn-git/ai-privacyutils/rulesets \
        --input .github/branch-rulesets/main.json
-     gh api --method POST repos/kgn-git/jobflow-privacyutils/rulesets \
+     gh api --method POST repos/kgn-git/ai-privacyutils/rulesets \
        --input .github/branch-rulesets/tags.json
      ```
    - Verify at Settings → Rules → Rulesets (should see `main-protected` + `tag-protected`).
@@ -276,14 +274,14 @@ The following MUST complete before the tag `v1.0.0` can be safely pushed. Ordere
    - Add fingerprint to `docs/SIGNING-TAGS.md` Release Maintainers table (§4) — commit via PR.
    - `git config --global user.signingkey <KEY_ID>` + `git config --global tag.gpgSign true` (§5).
 
-3. **Consumer-side `.npmrc` (S10) committed to `jobflow-scoring` + `jobflow-platform`.**
-   - Follow-up issues scoring#96 + platform#489 (per dispatch-prompt reference; to be dispatched by programme-manager as part of Sprint 2K).
-   - Without these committed, scoring#82 + platform#476 cannot reliably resolve `@kgn-git/privacy-utils` from GitHub Packages without developer-local `.npmrc` state.
+3. **Consumer-side `.npmrc` (S10) committed to consumer projects.**
+   - Follow-up issues filed in the consumer projects (cross-repo work).
+   - Without these committed, consumer-side adoption cannot reliably resolve `@kgn-git/privacy-utils` from GitHub Packages without developer-local `.npmrc` state.
 
 ### Soft blockers (recommended before tag)
 
 4. **Socket.dev GitHub App (S8).**
-   - Install from https://github.com/apps/socket-security on `kgn-git/jobflow-privacyutils`.
+   - Install from https://github.com/apps/socket-security on `kgn-git/ai-privacyutils`.
    - Free tier covers unlimited repos.
 
 5. **Org 2FA enforcement verification (S9).**
@@ -292,10 +290,10 @@ The following MUST complete before the tag `v1.0.0` can be safely pushed. Ordere
 
 ### Not blockers (post-tag handoffs)
 
-6. **Compliance C3 backlog issues** filed in `kgn-git/jobflow-privacyutils` (v1.1 / v1.2 / CI hardening). Per `ProgrammePlan` §11 these are Sprint 2K.A issues #1-#6 tracked in the programme plan.
-7. **DPA verification (C5 / F-13)** — ALREADY RESOLVED per `ProgrammePlan` §10 (OpenAI DPA auto-accepted since March 2023; Module 2 SCCs incorporated).
-8. **RoPA updates** — tracked as platform#488 + scoring#95 / scoring team follow-up.
-9. **Privacy notice update** (platform) — tracked as platform#488.
+6. **Compliance C3 backlog issues** filed in `kgn-git/ai-privacyutils` (v1.1 / v1.2 / CI hardening).
+7. **DPA verification (C5 / F-13)** — ALREADY RESOLVED (OpenAI DPA auto-accepted since March 2023; Module 2 SCCs incorporated).
+8. **RoPA updates** — tracked as cross-repo follow-ups in consumer projects.
+9. **Privacy notice update** — tracked in the relevant consumer project.
 
 ---
 
@@ -307,9 +305,9 @@ The following MUST complete before the tag `v1.0.0` can be safely pushed. Ordere
 
 ## Known Tech Debt
 
-- **Consumer-side `.npmrc` files** NOT committed to `jobflow-scoring` / `jobflow-platform` yet (S10). Follow-up issues exist but were not dispatched in this flight.
+- **Consumer-side `.npmrc` files** NOT committed to consumer projects yet (S10). Follow-up issues exist but were not dispatched in this flight.
 - **Release Maintainers table** in `docs/SIGNING-TAGS.md` is `TBD` — populated on first release by the user after GPG key setup.
-- **Backlog issues #1-#6** not yet filed in `kgn-git/jobflow-privacyutils` (C3). Programme-manager action.
+- **Backlog issues #1-#6** not yet filed in `kgn-git/ai-privacyutils` (C3). Dispatcher action.
 - **`scripts/redos-debug.mjs`** was created during dispatch to introspect `recheck` verdicts. Overwritten to empty placeholder at end of dispatch but not `git rm`'d (Bash `rm` was permission-denied mid-dispatch). The file is untracked and will be excluded from publishing via the `files` field in `package.json` (which only ships `dist/` + `README.md` + `CONTRIBUTING.md` + `LICENSE`). A follow-up cleanup commit may remove it; no functional impact.
 
 ---
@@ -354,9 +352,9 @@ A reviewer can navigate the PR by the commit stack rather than reviewing every f
 
 ## Handover To
 
-→ Dispatcher (`/programme-manager` at top-level session scope) for:
+→ Dispatcher (top-level session scope) for:
   1. Run `Agent(subagent_type="feature-dev:code-reviewer", ...)` against `feat/35-privacy-utils-v1` per SD-002 amended. Populate the Code Review section above with findings.
   2. Relay user-manual S-item list (items 1-5 above) to user for action.
-  3. Coordinate Sprint 2K.A backlog issue filing (#1-#6 in `kgn-git/jobflow-privacyutils`) per C3.
+  3. Coordinate backlog issue filing (#1-#6 in `kgn-git/ai-privacyutils`) per C3.
   4. When tag-ready gates all clear: authorise `v1.0.0` tag push (signed annotated tag per SIGNING-TAGS.md runbook).
-  5. Dispatch scoring#82 + platform#476 for consumer-side consumption after v1.0.0 publishes.
+  5. Dispatch consumer-project consumption work after v1.0.0 publishes.

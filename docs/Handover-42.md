@@ -3,9 +3,9 @@
 **Date:** 2026-04-30
 **Branch:** `feature/42-ner-compromise`
 **Base:** `main` @ 933ba0e (chore: bump 1.2.0-dev for Sprint 2K.B kick-off)
-**Developer:** Claude Code (`/developer` skill, dispatched by programme-manager)
-**Issue:** [kgn-git/jobflow-privacyutils#42](https://github.com/kgn-git/issues/42)
-**Sprint:** Sprint 2K.B: v1.2 NER name redaction
+**Developer:** Claude Code (`/developer` skill, dispatched by dispatcher)
+**Issue:** [kgn-git/ai-privacyutils#42](https://github.com/kgn-git/ai-privacyutils/issues/42)
+**Sprint:** v1.2 NER name redaction
 **Replaces:** Issue #7 (closed 2026-04-28 — Hybrid C / distilbert q8 bundle blocker)
 
 ---
@@ -22,7 +22,7 @@ The v1.2 compliance posture is documented and accepted: heuristic accuracy is ma
 
 ## Pre-Implementation Expert Reviews
 
-Per the utility-package fast-path expert roster (CLAUDE.md), four experts reviewed issue #42 on 2026-04-30 before dispatch. Verdicts and conditions reproduced verbatim from the dispatch preamble — full text in `jobflow-programme/docs/expert-reviews/PreImplReview-privacyutils-42-2026-04-30.md`.
+Per the utility-package fast-path expert roster (CLAUDE.md), four experts reviewed issue #42 on 2026-04-30 before dispatch. Verdicts and conditions reproduced verbatim from the dispatch preamble — full text held in the dispatcher's pre-implementation review record.
 
 | Expert | Consulted | Verdict | Reference |
 |---|---|---|---|
@@ -107,9 +107,9 @@ None. Sprint-close follow-up issues flagged for the dispatcher to create (per AC
 | Backlog issue | Purpose |
 |---|---|
 | ML upgrade backlog | Carry forward TP ≥95% per-cohort / ≤5pp variance / ≤5% FP / <60 MB bundle ACs to a future ML engine swap. Replacement is mechanical via the `NerEngine` interface. (compliance C7) |
-| Platform integration backlog | Enable `enableNer: true` in jobflow-platform's `sanitizePii` call path. (compliance C6) |
+| Consumer integration backlog | Enable `enableNer: true` in the consumer project's `sanitizePii` call path. (compliance C6) |
 
-These are PM gates documented in the issue body AC-8 and in ADR 004 § ML upgrade roadmap. `/developer` does not create them — the dispatcher (programme-manager) does at sprint close.
+These are PM gates documented in the issue body AC-8 and in ADR 004 § ML upgrade roadmap. `/developer` does not create them — the dispatcher does at sprint close.
 
 ---
 
@@ -252,7 +252,7 @@ None observed.
 
 ## Handover To
 
-→ Dispatcher (`/programme-manager` at top-level session scope) for:
+→ Dispatcher (top-level session scope) for:
 1. Code review via `Agent(subagent_type="feature-dev:code-reviewer")` against `feature/42-ner-compromise`.
-2. Sprint-close gate: create the two backlog issues (ML upgrade + Platform integration) before closing #42 (compliance C6 + C7).
+2. Sprint-close gate: create the two backlog issues (ML upgrade + Consumer integration) before closing #42 (compliance C6 + C7).
 3. Eventually: `/sprint-close` → `v1.2.0` tag-cut PR.

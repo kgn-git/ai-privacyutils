@@ -15,7 +15,7 @@ Per `CLAUDE.md` § Expert Roster — `compliance` + `ci-hardening` + supply-chai
 | `/tech-expert` | PASS — `package.json` license field MUST track LICENSE SPDX id | Issue #48 expert-review comment §C.3 |
 | `/tech-ops-expert` | PASS WITH CONDITIONS — body corrections (scoring N/A items) absorbed; lockfile-sequencing gotcha surfaced | Issue #48 expert-review comment §C.4 |
 
-Comment URL: https://github.com/kgn-git/jobflow-privacyutils/issues/48#issuecomment-4405749527
+Comment URL: https://github.com/kgn-git/ai-privacyutils/issues/48#issuecomment-4405749527
 
 ## What was implemented
 
@@ -48,7 +48,7 @@ Comment URL: https://github.com/kgn-git/jobflow-privacyutils/issues/48#issuecomm
 - TDD compliance: N/A — docs/license content has no test surface
 - Branch pushed to origin
 - PR opened against `main`
-- PR URL: https://github.com/kgn-git/jobflow-privacyutils/pull/50
+- PR URL: https://github.com/kgn-git/ai-privacyutils/pull/50
 
 ## SD-002 fix commits
 
@@ -67,7 +67,7 @@ Round 1 verdict: Fix first (2 Important findings, 0 Critical, 2 Minor pre-existi
 - **Round 2 (re-review) verdict:** Ready to merge
 - **Critical findings:** 0
 - **Important findings:** 2 (both fixed in round 1)
-  - **I-1** — `README.md` § Security Posture (S11) Kerckhoffs paragraph leaked internal programme jargon (`SD-002`) into a now-public file. Fixed in `a667f3628fcabd3f15acd7fdea4a6e5443ef6b9a`: replaced "SD-002 reviews" with "code reviews".
+  - **I-1** — `README.md` § Security Posture (S11) Kerckhoffs paragraph leaked internal jargon (`SD-002`) into a now-public file. Fixed in `a667f3628fcabd3f15acd7fdea4a6e5443ef6b9a`: replaced "SD-002 reviews" with "code reviews".
   - **I-2** — `CONTRIBUTING.md` § Security reports (line 87) referenced a dead email channel via `docs/SIGNING-TAGS.md` (TBD maintainer table) and conflicted with the canonical channel newly defined in `SECURITY.md`. Fixed in `d0a90ae33e8833324c8c89b36a796c07371f0a9d`: rewrote paragraph to point at `SECURITY.md` as the canonical channel.
 - **Minor findings:** 2 (both pre-existing on `main`; NOT introduced by this PR; filed as follow-up housekeeping issues by `/project-manager`)
   - **M-1** — `README.md` § SemVer policy line 300: "Every tag cuts from `main` via a signed annotated tag (see S3)" reads as current practice when S3 is deferred.

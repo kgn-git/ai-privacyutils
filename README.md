@@ -1,12 +1,12 @@
 # `@kgn-git/privacy-utils`
 
-Canonical PII-redaction library for the Jobflow programme. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`) per compliance review §R8. **v1.2 adds opt-in PERSON-name redaction** (`sanitizePiiAsync({ enableNer: true })`) via a heuristic NER engine (`compromise` v14) behind a pluggable `NerEngine` abstraction — closing the largest residual GDPR Art. 5(1)(c) gap on the LLM prompt path (R3, partial — see § Known Limitations).
+A standalone TypeScript PII-redaction library for LLM prompts. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`). **v1.2 adds opt-in PERSON-name redaction** (`sanitizePiiAsync({ enableNer: true })`) via a heuristic NER engine (`compromise` v14) behind a pluggable `NerEngine` abstraction — closing the largest residual GDPR Art. 5(1)(c) gap on the LLM prompt path (R3, partial — see § Known Limitations).
 
-v1.0.0 ships the first-ever PII redaction on the Jobflow platform's LLM path, closing a pre-existing GDPR Art. 5(1)(c) / 25 / 32 compliance gap. It is consumed by [`jobflow-scoring`](https://github.com/kgn-git/jobflow-scoring) (scoring#82) and [`jobflow-platform`](https://github.com/kgn-git/jobflow-platform) (platform#476).
+v1.0.0 was the first release; it provides PII redaction on the LLM prompt path as a GDPR Art. 5(1)(c) / 25 / 32 data-minimisation control.
 
 ## Installation
 
-`@kgn-git/privacy-utils` ships as a private git-installable package for consumption inside the Jobflow programme. There is **no npm registry publish step** — consumers install directly from the git tag.
+`@kgn-git/privacy-utils` ships as a git-installable package under the `kgn-git` GitHub organisation. There is **no npm registry publish step** — consumers install directly from the git tag.
 
 ### Consumer setup
 
@@ -15,14 +15,14 @@ In the consumer repo's `package.json`, add a dependency pinned to an exact git t
 ```json
 {
   "dependencies": {
-    "@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v1.0.0"
+    "@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#v1.0.0"
   }
 }
 ```
 
-When `npm install` runs, npm clones the tag at the named ref, runs the package's `prepare` script to build `dist/`, and the resulting artefacts are available at `@kgn-git/privacy-utils` in `node_modules/`. Consumers need **read access to `kgn-git/jobflow-privacyutils`** (automatic for org members; CI runners need a token).
+When `npm install` runs, npm clones the tag at the named ref, runs the package's `prepare` script to build `dist/`, and the resulting artefacts are available at `@kgn-git/privacy-utils` in `node_modules/`. Consumers need **read access to `kgn-git/ai-privacyutils`** (public repo — anonymous read is fine; CI runners can use a token where the platform requires one for private-pin parity).
 
-For CI runners, provide a Personal Access Token or a GitHub App token with `Repository permissions: Contents: Read` on `kgn-git/jobflow-privacyutils`, exported as `GITHUB_TOKEN` (or whatever variable your package manager uses for private git access).
+For CI runners that authenticate git fetches, provide a Personal Access Token or a GitHub App token with `Repository permissions: Contents: Read` on `kgn-git/ai-privacyutils`, exported as `GITHUB_TOKEN` (or whatever variable your package manager uses for git access).
 
 ### Version pinning
 
@@ -35,7 +35,7 @@ For CI runners, provide a Personal Access Token or a GitHub App token with `Repo
 
 ### Why git-install rather than npm registry?
 
-Single-org internal consumption; two consumer repos (`jobflow-scoring`, `jobflow-platform`). npm registry publish would require tokens + `.npmrc` config per consumer + registry attack surface. The git-install path avoids all of this with equivalent version-pinning ergonomics. See `docs/Handover-35.md` § Architecture pivot 2026-04-19 for full rationale.
+Single-org consumption with a small set of consumer repos. npm registry publish would require tokens + `.npmrc` config per consumer + registry attack surface. The git-install path avoids all of this with equivalent version-pinning ergonomics. See `docs/Handover-35.md` § Architecture pivot 2026-04-19 for full rationale.
 
 ## Usage
 
@@ -164,13 +164,13 @@ re2.exec('mail jane@example.com');
 
 ## GDPR Rationale
 
-`@kgn-git/privacy-utils` is the Jobflow programme's formalised Art. 5(1)(c) data-minimisation control for LLM prompt emission.
+This library provides a formalised Art. 5(1)(c) data-minimisation control for LLM prompt emission.
 
-- **Art. 5(1)(c) — data minimisation.** LLM operations across the programme (skill extraction, cover-letter generation, gap analysis, CV tailoring, embeddings, translation) are content-shape transformations. None require the applicant's email, phone, postal address, or DOB as input signal. Redacting those classes before emission is the textbook minimisation measure.
+- **Art. 5(1)(c) — data minimisation.** LLM operations on free-text user input (skill extraction, cover-letter generation, gap analysis, CV tailoring, embeddings, translation) are content-shape transformations. None require the user's email, phone, postal address, or DOB as input signal. Redacting those classes before emission is the textbook minimisation measure.
 - **Art. 25 — privacy by design and by default.** The middleware placement at `transformParams` is the single latest application-layer intercept — every SDK-based LLM call passes through automatically once the middleware is registered on the model. Running later (provider-SDK patch) cedes control; running earlier (per-caller) fragments enforcement. Privacy-by-default (Art. 25(2)) holds because redaction is on as soon as the middleware is registered; opting out requires an explicit code change.
-- **Art. 32 — security of processing.** Regex redaction is an appropriate technical measure at the v1.0.0 maturity level given the risk profile (B2C advisory feedback, OpenAI as contracted processor). Full pattern audit in `jobflow-programme/docs/compliance-reviews/ComplianceReview-2026-04-19-privacy-utils-v1.0.0.md` §5.
+- **Art. 32 — security of processing.** Regex redaction is an appropriate technical measure at the v1.0.0 maturity level given a typical risk profile (B2C advisory feedback, contracted LLM processor). Pattern audit history is maintained in this repo's commit + handover docs.
 
-This package does not create a new Art. 13 disclosure obligation. Platform-side privacy notices should nonetheless note that PII redaction is applied before third-party LLM processing (it is both accurate and claims the minimisation credit).
+This package does not create a new Art. 13 disclosure obligation. Consumer-side privacy notices should nonetheless note that PII redaction is applied before third-party LLM processing (it is both accurate and claims the minimisation credit).
 
 ## Design decisions and non-goals
 
@@ -249,7 +249,7 @@ v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/I
 | R10-residual | (a) PT NIF mod-11 has a 1/11 false-positive rate on random 9-digit sequences whose last digit happens to match the computed check digit (`000000000`, `123456789` shaped) — accepted precision trade-off (recall over precision on free CV text). (b) FR NIR Corsica conversion (`2A`/`2B` département codes mapped to `19`/`18` before mod-97) is not implemented — Corsican NIRs will fail validation and pass through. (c) IT Codice Fiscale omocodia (letter substitution on hash collision) not handled — rare edge case. (d) DE Steuer-ID / Rentenversicherungsnummer deferred. (e) Redaction is destructive / one-way — matched bytes are not retained, logged, or returned. | Low | Documented gaps | v1.2 — DE coverage; future — Corsica NIR + IT omocodia per consumer demand |
 | R8 | ~~Replacement tokens `[email]` / `[phone]` / `[address]` / `[postcode]` / `[dob]` collide with user-authored literal strings. Not cryptographically distinguishable from authored text.~~ **Resolved in v1.1** via opt-in `tokenFormat: 'sentinel'` option — produces `<<REDACTED_X>>` low-collision tokens. Default remains `'readable'` (v1.0.0 byte-identical); default swap to sentinel deferred to v2.0 for SemVer. | Low | **Resolved (opt-in)** | v1.1 (this release) |
 
-Both **R1** (v1.1 #1) and **R2** (v1.1 #2) are now in-package. Consuming apps no longer need caller-level scrubbing for FR/DE/IT/ES/PT structured addresses, UK/FR/DE/IT/ES/PT postcodes, or any of the six supported phone locales. For scoring, the existing `sanitizePii` on the chunker boundary (`cv-chunker.ts:186`, `cv-chunker.ts:203`) and post-LLM evidence-quote scrubbing (`llm-coverage.service.ts:178`) remain in place as defence-in-depth.
+Both **R1** (v1.1 #1) and **R2** (v1.1 #2) are now in-package. Consuming apps no longer need caller-level scrubbing for FR/DE/IT/ES/PT structured addresses, UK/FR/DE/IT/ES/PT postcodes, or any of the six supported phone locales. Existing caller-level pre/post-LLM scrubbing remains a sensible defence-in-depth complement to the middleware.
 
 **Performance budget:** `sanitizePii` completes under 10ms on a ~10KB prompt containing mixed EU-style PII (verified by `src/__tests__/locale-patterns.test.ts` performance test — 10-run mean). The locale-aware phone pass adds six `findPhoneNumbersInText` calls per `sanitizePii` invocation; each is O(n) over the input and backed by `libphonenumber-js/min` metadata (~19KB gz). The performance assertion remains green at the v1.1 gate.
 
@@ -257,7 +257,7 @@ Both **R1** (v1.1 #1) and **R2** (v1.1 #2) are now in-package. Consuming apps no
 
 ## Security Posture (S11)
 
-This package is a canonical compliance control on the LLM prompt edge. A silent compromise would leak CV PII to OpenAI on every call with zero visible symptom to applicants or operators. Supply-chain posture accordingly:
+This package is a compliance control on the LLM prompt edge. A silent compromise would leak user PII to the third-party LLM processor on every call with zero visible symptom to end users or operators. Supply-chain posture accordingly:
 
 - **S1 — `main` branch protection.** **Deferred under reduced-tier security posture (2026-04-19 decision, single-maintainer internal package — see `docs/Handover-35.md`).** Intent: required reviews ≥ 1, dismiss stale approvals, required status checks (lint, typecheck, test, redos-scan, audit, dependency-review), signed commits, linear history, block force push, plus CODEOWNERS gating `.github/`, `package.json`, `package-lock.json`, `src/patterns.ts`, `src/pii-middleware.ts`. Current state: `main` has no protection rules; solo-maintainer discipline relies on feature-branch workflow + per-PR CI gates. S1 will move to "in place" alongside S2 + S3 in a later sprint if the threat model shifts (external distribution, multi-maintainer).
 - **S2 — tag ruleset.** **Deferred under reduced-tier security posture (2026-04-19 decision, single-maintainer internal package — see `docs/Handover-35.md`).** Intent: a `v*.*.*` tag ruleset with restrict-deletions + restrict-updates (immutable) + maintainers-only authorship. Current state: tags are mutable / deletable by the sole maintainer without a ruleset. Consumers pin by exact tag per `docs/INTEGRITY.md`; tag immutability becomes meaningful only once external consumers share the threat surface. S2 will activate alongside S1 + S3 when posture escalates.
@@ -268,13 +268,13 @@ This package is a canonical compliance control on the LLM prompt edge. A silent 
 - **S7 — Dependabot.** Weekly npm + github-actions updates; no auto-merge (every bump goes through branch-protected PR).
 - **S8 — Socket.dev GitHub App.** Behavioural analysis of every new dep (install scripts, network access, filesystem writes, typosquat).
 - **S9 — Org 2FA enforcement.** `kgn-git` organisation enforces 2FA on all members.
-- **S10 — Consumer-side typosquat defence.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry lookup, so typosquat on `npm.pkg.github.com` is not a threat surface. Replaced by consumer **exact-tag git-ref pinning** in `package.json` (e.g. `"@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v1.0.0"`) — npm resolves the named tag from the pinned GitHub repo directly; no registry intermediary; upgrades are explicit PR-gated ref bumps.
+- **S10 — Consumer-side typosquat defence.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry lookup, so typosquat on `npm.pkg.github.com` is not a threat surface. Replaced by consumer **exact-tag git-ref pinning** in `package.json` (e.g. `"@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#v1.0.0"`) — npm resolves the named tag from the pinned GitHub repo directly; no registry intermediary; upgrades are explicit PR-gated ref bumps.
 - **S12 — Runtime input-length cap (v1.1, issue #10).** Belt-and-braces ReDoS defence. Every call to `sanitizePii(text, options?)` enforces `text.length <= options.maxInputLength` (default `DEFAULT_MAX_INPUT_LENGTH` = 500_000 JS string code units, ~500 KB ASCII) with an O(1) gate that runs BEFORE any regex. Over-cap inputs throw `PiiInputTooLargeError` with numeric `.inputLength` and `.maxInputLength` props. `createPiiMiddleware({ maxInputLength })` threads the cap into every internal `sanitizePii` call applied to prompt / message-content / text-part / reasoning-part strings; the cap is enforced **per part** (one regex pass = one bounded cost), not summed across a prompt. Complements S5 (static `recheck` lint): S5 catches known super-linear shapes at CI time; S12 bounds worst-case CPU at runtime regardless of static-analysis gaps. Full design in `docs/adr/002-input-length-cap.md`.
 - **Kerckhoffs-aligned posture (v1.2+).** This package is designed to remain robust under public source disclosure. Redaction recall does not depend on attacker ignorance of pattern shapes — adversarial fixtures are part of the test suite (`src/__tests__/locale-patterns.test.ts`, cohort-benchmark tests), and code reviews exercise narrowing on attacker-aware bypass attempts. The visible pattern set is the contract; security-by-obscurity is not part of the threat model. This is the explicit Art. 32 framing for the public-source posture: "appropriate technical measures" remain in place when the source is open.
 
-Full security review: `jobflow-programme/docs/security-reviews/SecurityReview-2026-04-19-privacy-utils-v1.0.0-hardening.md`.
+Security review history is recorded in this repo's commit log and `docs/Handover-N.md` series.
 
-**Threat model:** a single maintainer-account takeover or a single un-reviewed commit to `main` can subvert the entire Jobflow LLM path. The hardening budget is therefore weighted toward prevention at the authoring boundary (S1–S3) and end-to-end integrity attestation (S4) with scanners (S5–S8) as second line.
+**Threat model:** a single maintainer-account takeover or a single un-reviewed commit to `main` can subvert the entire LLM path of any consumer that wires this middleware in. The hardening budget is therefore weighted toward prevention at the authoring boundary (S1–S3) and end-to-end integrity attestation (S4) with scanners (S5–S8) as second line.
 
 ## Integrity verification
 

@@ -84,15 +84,15 @@ A note for transparency, not a deviation: programme references that remain in `.
 
 - **Branch:** `feat/issue-52-standalone-rebrand`
 - **Base SHA:** `26639d7fbcadbb05aeb5af548d7a6e8f95d3b772`
-- **Head SHA (pre handover-finalise):** `7a7c98bff2b58a1bbc5a359502582cdc78d539e0`
+- **Head SHA (when PR opened):** `b79686e370c348486b088328462a1422ecfbbd72`
 - **Build:** `npm run build` — green (tsc -p tsconfig.build.json, 0 errors)
 - **Lint:** `npm run lint` — green (eslint src, 0 errors, 0 warnings)
 - **Tests:** `npm test -- --run` — **360 / 361 passing**. The single failing test (`src/__tests__/locale-patterns.test.ts > sanitizePii regex-only — performance budget > processes a 10KB prompt in under 10ms (mean of 10 runs)`) is the **pre-existing perf flake** documented in PR #50 SD-002 record — not a regression. Measured mean this run: ~10.5 ms vs `<10` ms threshold. The same flake fails on `main` baseline; this PR contains zero `src/` logic changes, so a runtime regression is not possible. Test count preserved (361 → 361, same 360 passing / 1 flaking mapping). Pre-existing perf flake confirmed identical, NOT a new failure.
 - **TDD compliance:** N/A — docs/license/text-only changes have no test surface.
-- **Branch pushed to origin:** ⏳ done as part of finalisation (push step in § Phase D).
-- **PR opened against main:** ⏳ to be filled in handover-finalise commit after `gh pr create`.
-- **PR URL:** *to be filled by handover-finalise commit.*
-- **Final HEAD SHA:** *to be filled by handover-finalise commit.*
+- **Branch pushed to origin:** ✅
+- **PR opened against main:** ✅
+- **PR URL:** https://github.com/kgn-git/ai-privacyutils/pull/53
+- **Final HEAD SHA:** *advances by one commit when this handover-finalise commit is pushed; the dispatcher's review covers both the PR-open SHA above and this finalisation commit.*
 
 ## Code Review
 

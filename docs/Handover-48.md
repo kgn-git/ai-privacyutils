@@ -41,14 +41,14 @@ Comment URL: https://github.com/kgn-git/jobflow-privacyutils/issues/48#issuecomm
 
 - Branch: `feat/issue-48-pre-flip-docs`
 - Base SHA: `17e0928dc13f985bc3e8891ab8a8237e98bec5eb`
-- Head SHA: <to be filled after final commit + push>
+- Head SHA (pre-handover-finalise): `9294c71db94ad66095b3c1c78fe4fcb8a2ee92f4` (final HEAD will advance one commit when this handover-finalise commit is pushed)
 - Build: `npm run build` — green
 - Lint: `npm run lint` — green
-- Tests: `npm test -- --run` — green (baseline preserved; no test changes in this PR)
+- Tests: `npm test -- --run` — **360 / 361** passing. The single failing test (`src/__tests__/locale-patterns.test.ts > sanitizePii regex-only — performance budget`) is **a pre-existing flake on `main`**, not a regression. The same test fails on the unmodified `main` baseline at `17e0928d` (measured `~41.9ms` mean) and on this branch (measured `~14.5ms` mean) — both above the `<10ms` budget under concurrent-worker-pool Vitest load on this Windows dev machine. When run in isolation (`vitest run src/__tests__/locale-patterns.test.ts`), the perf assertion passes well under budget. This PR contains zero `src/` changes, so a runtime regression is not possible. Test count is preserved (361 → 361, same passing 360 / failing 1 mapping). Flagged in PR body for project-manager review at SD-002.
 - TDD compliance: N/A — docs/license content has no test surface
 - Branch pushed to origin
 - PR opened against `main`
-- PR URL: <to be filled after PR open>
+- PR URL: https://github.com/kgn-git/jobflow-privacyutils/pull/50
 
 ## Code Review
 

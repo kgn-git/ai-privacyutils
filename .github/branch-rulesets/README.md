@@ -1,8 +1,8 @@
 # Branch + tag rulesets
 
-These JSON files document the intended branch-protection and tag-protection configuration for `kgn-git/jobflow-privacyutils` per security review §2 (S1) and §3.1 (S2).
+These JSON files document the intended branch-protection and tag-protection configuration for `kgn-git/ai-privacyutils` (S1 branch protection, S2 tag ruleset; see SECURITY.md / README § Security Posture).
 
-The dispatcher attempts to apply these rulesets via `gh api --method POST /repos/kgn-git/jobflow-privacyutils/rulesets` during initial repo setup. If that call fails due to permissions (which is expected for an org-owned repo where only org admins can create rulesets), the user must apply them manually via the GitHub UI:
+The setup process attempts to apply these rulesets via `gh api --method POST /repos/kgn-git/ai-privacyutils/rulesets` during initial repo setup. If that call fails due to permissions (which is expected for an org-owned repo where only org admins can create rulesets), the user must apply them manually via the GitHub UI:
 
 1. Go to **Settings → Rules → Rulesets → New ruleset**.
 2. For `main.json`: create a branch ruleset named `main-protected` with the settings in the JSON file.
@@ -14,13 +14,13 @@ Alternatively, the JSON files can be applied with the `gh` CLI once an org admin
 gh api \
   --method POST \
   -H "Accept: application/vnd.github+json" \
-  /repos/kgn-git/jobflow-privacyutils/rulesets \
+  /repos/kgn-git/ai-privacyutils/rulesets \
   --input .github/branch-rulesets/main.json
 
 gh api \
   --method POST \
   -H "Accept: application/vnd.github+json" \
-  /repos/kgn-git/jobflow-privacyutils/rulesets \
+  /repos/kgn-git/ai-privacyutils/rulesets \
   --input .github/branch-rulesets/tags.json
 ```
 

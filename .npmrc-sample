@@ -1,4 +1,4 @@
-# Sample .npmrc for consumer repositories (jobflow-scoring, jobflow-platform).
+# Sample .npmrc for consumer repositories that install this package via git+https.
 # Copy to repo root as `.npmrc` and ensure NODE_AUTH_TOKEN / GITHUB_TOKEN is set
 # in CI environment with `read:packages` scope.
 

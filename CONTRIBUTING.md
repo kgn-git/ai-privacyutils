@@ -1,21 +1,21 @@
-# Contributing to `@kgn-git/privacy-utils`
+ilth# Contributing to `@kgn-git/privacy-utils`
 
-This package is a compliance-critical control on the LLM prompt edge of every Jobflow LLM call. Contributions are subject to higher scrutiny than typical application code. Please read this document in full before opening a PR.
+This package is a compliance-critical control on the LLM prompt edge of every consumer LLM call. Contributions are subject to higher scrutiny than typical application code. Please read this document in full before opening a PR.
 
 ## External contributions
 
-This package is maintained internally for the Jobflow programme by the
-`kgn-git` team. Issues are enabled but **no SLA is offered** — bug reports
-are welcome but may not be triaged on any specific timeline. Pull requests
-from contributors outside the `kgn-git` org will be closed without review;
-external contributions are not currently accepted. For vulnerability
-reports, see [`SECURITY.md`](SECURITY.md).
+This package is maintained by the `kgn-git` team. Issues are enabled but
+**no SLA is offered** — bug reports are welcome but may not be triaged on
+any specific timeline. Pull requests from contributors outside the
+`kgn-git` org will be closed without review; external contributions are
+not currently accepted. For vulnerability reports, see
+[`SECURITY.md`](SECURITY.md).
 
 ## Local development
 
 ```bash
-git clone https://github.com/kgn-git/jobflow-privacyutils.git
-cd jobflow-privacyutils
+git clone https://github.com/kgn-git/ai-privacyutils.git
+cd ai-privacyutils
 npm ci
 npm test                # vitest
 npm run build           # tsc
@@ -27,7 +27,7 @@ All four commands must pass before a PR is mergeable. CI enforces the same four 
 
 ## Regex design guidance (compliance-critical)
 
-Regex patterns in `src/patterns.ts` are the compliance contract of this package. Any change to them has programme-wide impact.
+Regex patterns in `src/patterns.ts` are the compliance contract of this package. Any change to them has package-wide impact for every consumer.
 
 ### ReDoS-safe construction rules
 
@@ -39,13 +39,13 @@ Regex patterns in `src/patterns.ts` are the compliance contract of this package.
 
 ### Byte-equivalent behaviour on ported patterns
 
-v1.0.0's email / address / phone patterns are ports from `jobflow-scoring/src/lib/services/cv-chunker.ts:72-91`. Future patch-level rewrites (ReDoS hardening without semantic change) MUST preserve byte-equivalent output on every fixture in `src/__tests__/sanitize-pii.test.ts`. If a rewrite changes output on even one fixture, it is no longer a patch — bump the minor (additive recall) or major (removed recall) per the SemVer policy in `README.md`.
+v1.0.0's email / address / phone patterns originated as ports of earlier internal regex sources; this file is the canonical source going forward. Future patch-level rewrites (ReDoS hardening without semantic change) MUST preserve byte-equivalent output on every fixture in `src/__tests__/sanitize-pii.test.ts`. If a rewrite changes output on even one fixture, it is no longer a patch — bump the minor (additive recall) or major (removed recall) per the SemVer policy in `README.md`.
 
 When in doubt, add the fixture to the test suite BEFORE the regex rewrite and watch it go from RED to GREEN. The test suite is the compliance contract.
 
 ### Locale expansion (v1.1+)
 
-Locale-aware patterns (FR / DE / IT / ES / PT address + phone) are the top-priority v1.1 additions per compliance review §7 R1+R2. When implementing them:
+Locale-aware patterns (FR / DE / IT / ES / PT address + phone) were the top-priority v1.1 additions. When extending locale coverage:
 
 - Add per-locale exports (`addressPatternFr`, `addressPatternDe`, …). Do NOT bake them into the existing `addressPattern` — preserve byte-equivalent behaviour on the v1.0.0 English-only pattern so consumers who don't need locale coverage see no behaviour change.
 - Update `piiPatterns` to a nested record: `{ email, phone: { international, domestic, fr, de, ... }, address: { en, fr, de, ... }, dob }`. This is a minor bump per SemVer policy (additive).
@@ -65,7 +65,7 @@ Breaking changes are discouraged before v2.0 — prefer adding a parallel patter
 ## Commit + PR discipline
 
 - Every commit references the issue: `feat(#<n>)`, `fix(#<n>)`, `test(#<n>)`, `docs(#<n>)`.
-- Tests land in a RED commit before the GREEN implementation commit (SI-001 per programme process rules).
+- Tests land in a RED commit before the GREEN implementation commit (TDD discipline — every regex change is fixture-driven).
 - PRs are approved by a reviewer other than the author. The `privacy-utils-maintainers` team is set up in the `kgn-git` org; see `CODEOWNERS`.
 - Never push directly to `main` for substantive changes. Branch protection (S1) is currently deferred per the reduced-tier security posture documented in `README.md` § Security Posture; the discipline is solo-maintainer convention, not enforced by GitHub rules. This will tighten if the threat model shifts (see issue #49).
 - Never amend after push (tags are immutable; commits are reviewable history).
@@ -78,7 +78,7 @@ Tags are cut from `main` by a maintainer:
 2. After merge: `git checkout main && git pull --ff-only`.
 3. `git tag -a v<x>.<y>.<z> -m "Release v<x>.<y>.<z> — <short change summary>"`. (Annotated tag; GPG signing — `-s` — is deferred per S3 deferred-tier posture documented in `README.md` § Security Posture, with the activation guide retained in `docs/SIGNING-TAGS.md` for when S3 activates.)
 4. `git push origin v<x>.<y>.<z>`.
-5. Consumers bump their `package.json` pin (`"@kgn-git/privacy-utils": "github:kgn-git/jobflow-privacyutils#v<x>.<y>.<z>"`) and run `npm install` to fetch the new tag and rebuild via the `prepare` lifecycle script.
+5. Consumers bump their `package.json` pin (`"@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#v<x>.<y>.<z>"`) and run `npm install` to fetch the new tag and rebuild via the `prepare` lifecycle script.
 
 There is no npm-registry publish step. The package is git-installable only — see `README.md` § Distribution and `docs/Handover-35.md` § Architecture pivot 2026-04-19 for the rationale. If the package is later promoted to a registry for external distribution, the deleted `publish.yml` workflow can be revived from git history at commit `877b478`.
 

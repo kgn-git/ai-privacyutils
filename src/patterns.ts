@@ -635,35 +635,119 @@ import { nationalIdByLocale } from './patterns-national-id.js';
  * Does NOT match bare years (`1985`) or month-year only (`March 1985`) —
  * those are non-DOB contexts (employment dates, etc.).
  */
+/**
+ * Date-shape sub-patterns shared by `dobPattern` (standalone, by-shape) and
+ * `dobContextCuePattern` (v1.3 — issue #64, cue-gated). Extracted to a single
+ * const so the two factories can never drift. `dobPattern()` joins these with
+ * `|` producing the exact same RegExp source as v1.2 (byte-identical — the
+ * shared-fixtures DOB suite in `sanitize-pii.test.ts` pins this).
+ *
+ * Each element is ReDoS-safe (linear — no nested quantifiers on overlapping
+ * character classes).
+ */
+const DOB_DATE_SUBPATTERNS: readonly string[] = [
+  // Numeric: DD.MM.YYYY | DD/MM/YYYY | DD-MM-YYYY
+  '\\b\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4}\\b',
+  // Numeric: YYYY-MM-DD (ISO)
+  '\\b\\d{4}-\\d{1,2}-\\d{1,2}\\b',
+  // Named month, day-first: "12 March 1985" (+ EU locales)
+  // Day, optional period, whitespace, month name (EN/FR/DE/IT/ES/PT),
+  // whitespace, optional "de " for ES/PT, year.
+  '\\b\\d{1,2}\\.?\\s+(?:' +
+    // EN
+    'January|February|March|April|May|June|July|August|September|October|November|December|' +
+    // FR
+    'janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre|' +
+    // DE
+    'Januar|Februar|M[aä]rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember|' +
+    // IT
+    'gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|' +
+    // ES / PT share many month names — grouped
+    'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|' +
+    'janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro' +
+    ')(?:\\s+de)?\\s+\\d{4}\\b',
+  // Named month, US-style month-first: "March 12, 1985"
+  '\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b',
+  // Day + German named month preceded by "de" prefix (ES/PT pattern with ES day prefix)
+  '\\b\\d{1,2}\\s+de\\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|janeiro|fevereiro|mar[çc]o|maio|junho|julho|setembro|outubro|novembro|dezembro)\\s+de\\s+\\d{4}\\b',
+];
+
 export function dobPattern(): RegExp {
+  return new RegExp(DOB_DATE_SUBPATTERNS.join('|'), 'g');
+}
+
+/**
+ * Date-of-birth CONTEXT-CUE sub-patterns (v1.3 — issue #64).
+ *
+ * A closed, ordered alternation of explicit date-of-birth labels across the
+ * six supported locales. Ordered longest-first where prefixes overlap
+ * (`born on` before `born`, `geboren am` before `geboren`) so the regex
+ * engine claims the fuller cue first. Every element is a literal phrase —
+ * no quantifiers — so the alternation is trivially ReDoS-safe.
+ *
+ * Used ONLY by the `'cv'` redaction profile (`dobContextCuePattern`), which
+ * redacts a date ONLY when it is immediately preceded by one of these cues.
+ * Plain employment start/end dates carry no cue and are preserved.
+ */
+const DOB_CONTEXT_CUES: readonly string[] = [
+  // EN
+  'date of birth',
+  'birth ?date',
+  'd\\.?o\\.?b\\.?',
+  'born on',
+  'born',
+  // FR
+  'date de naissance',
+  'née le',
+  'né le',
+  // DE
+  'geburtsdatum',
+  'geboren am',
+  'geboren',
+  // IT
+  'data di nascita',
+  'nato il',
+  'nata il',
+  // ES
+  'fecha de nacimiento',
+  'nacido el',
+  'nacida el',
+  // PT
+  'data de nascimento',
+  'nascido em',
+  'nascida em',
+  'nascido a',
+  'nascida a',
+];
+
+/**
+ * Context-cued date-of-birth pattern (v1.3 — issue #64) for the `'cv'`
+ * profile.
+ *
+ * Matches `(cue)(separator)(date)` where:
+ *   - group 1 = an explicit DOB cue from `DOB_CONTEXT_CUES`;
+ *   - group 2 = a short bounded separator (`[\s:]{0,4}` — whitespace / colon,
+ *     e.g. `": "`, `" "`), ReDoS-safe by the `{0,4}` bound;
+ *   - group 3 = a date shape from `DOB_DATE_SUBPATTERNS`.
+ *
+ * Case-insensitive (`i`) so `DOB` / `Born` / `Née` match; global (`g`) so
+ * every labelled DOB in the text is caught. Consumers redact ONLY group 3,
+ * preserving the cue text (which is not itself PII).
+ *
+ * The leading `\b` prevents matching a cue embedded in a larger word
+ * (e.g. `reborn`). The bounded separator keeps the cue and the date adjacent,
+ * so an unrelated employment date later in the sentence is not swept in.
+ */
+export function dobContextCuePattern(): RegExp {
   return new RegExp(
-    [
-      // Numeric: DD.MM.YYYY | DD/MM/YYYY | DD-MM-YYYY
-      '\\b\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4}\\b',
-      // Numeric: YYYY-MM-DD (ISO)
-      '\\b\\d{4}-\\d{1,2}-\\d{1,2}\\b',
-      // Named month, day-first: "12 March 1985" (+ EU locales)
-      // Day, optional period, whitespace, month name (EN/FR/DE/IT/ES/PT),
-      // whitespace, optional "de " for ES/PT, year.
-      '\\b\\d{1,2}\\.?\\s+(?:' +
-        // EN
-        'January|February|March|April|May|June|July|August|September|October|November|December|' +
-        // FR
-        'janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre|' +
-        // DE
-        'Januar|Februar|M[aä]rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember|' +
-        // IT
-        'gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|' +
-        // ES / PT share many month names — grouped
-        'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|' +
-        'janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro' +
-        ')(?:\\s+de)?\\s+\\d{4}\\b',
-      // Named month, US-style month-first: "March 12, 1985"
-      '\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b',
-      // Day + German named month preceded by "de" prefix (ES/PT pattern with ES day prefix)
-      '\\b\\d{1,2}\\s+de\\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|janeiro|fevereiro|mar[çc]o|maio|junho|julho|setembro|outubro|novembro|dezembro)\\s+de\\s+\\d{4}\\b',
-    ].join('|'),
-    'g',
+    '\\b(' +
+      DOB_CONTEXT_CUES.join('|') +
+      ')([\\s:]{0,4})(' +
+      '(?:' +
+      DOB_DATE_SUBPATTERNS.join('|') +
+      ')' +
+      ')',
+    'gi',
   );
 }
 
@@ -721,6 +805,7 @@ export const piiPatterns = {
   phoneInternational: phoneInternationalPattern,
   phoneDomestic: phoneDomesticPattern,
   dob: dobPattern,
+  dobContextCue: dobContextCuePattern,
 } as const;
 
 export type PiiPatternName = keyof typeof piiPatterns;

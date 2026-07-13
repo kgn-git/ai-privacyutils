@@ -36,6 +36,7 @@ import {
   phoneInternationalPattern,
   phoneDomesticPattern,
   dobPattern,
+  dobContextCuePattern,
 } from '../dist/patterns.js';
 
 // Pattern exports are factory functions (IMP-1); call each to obtain the
@@ -62,6 +63,7 @@ const targets = [
   ['phoneInternationalPattern', phoneInternationalPattern()],
   ['phoneDomesticPattern', phoneDomesticPattern()],
   ['dobPattern', dobPattern()],
+  ['dobContextCuePattern', dobContextCuePattern()],
 ];
 
 let failed = 0;

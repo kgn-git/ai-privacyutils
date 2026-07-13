@@ -110,10 +110,10 @@ describe('cv profile — PII-guard (async + NER): true PII still masked', () => 
   const PII_TEXT = [
     'Jane Doe',
     'Email: jane.doe@example.com',
-    'Phone: +44 7700 900123',
-    'Address: 221B Baker Street, London',
+    'Phone: +44 555 123 4567',
+    'Address: 42 Baker Street, London',
     'Postcode: SW1A 1AA',
-    'National Insurance: QQ123456C',
+    'National Insurance: AB123456C',
   ].join('\n');
 
   it('masks person, email, phone, street address, postcode and national ID under cv profile', async () => {
@@ -126,9 +126,9 @@ describe('cv profile — PII-guard (async + NER): true PII still masked', () => 
     expect(out).toContain('[email]');
     expect(out).not.toContain('jane.doe@example.com');
     expect(out).toContain('[phone]');
-    expect(out).not.toContain('900123');
+    expect(out).not.toContain('555 123 4567');
     expect(out).toContain('[address]');
-    expect(out).not.toContain('221B Baker Street');
+    expect(out).not.toContain('42 Baker Street');
     expect(out).toContain('[postcode]');
     expect(out).not.toContain('SW1A 1AA');
     expect(out).toContain('[nationalId]');

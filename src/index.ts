@@ -41,6 +41,7 @@
 
 export { sanitizePii } from './sanitize-pii.js';
 export type { SanitizePiiOptions } from './sanitize-pii.js';
+export type { RedactionProfile } from './profiles.js';
 export { sanitizePiiAsync, applyNerRedactions } from './sanitize-pii-async.js';
 export type { SanitizePiiAsyncOptions } from './sanitize-pii-async.js';
 export {
@@ -100,6 +101,7 @@ export {
   computeFrNirCheckKey,
   computeItCodiceFiscaleCheckLetter,
   dobPattern,
+  dobContextCuePattern,
 } from './patterns.js';
 export type {
   PiiPatternName,

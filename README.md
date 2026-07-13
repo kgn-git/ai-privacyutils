@@ -1,6 +1,6 @@
 # `@kgn-git/privacy-utils`
 
-A standalone TypeScript PII-redaction library for LLM prompts. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`). **v1.2 adds opt-in PERSON-name redaction** (`sanitizePiiAsync({ enableNer: true })`) via a heuristic NER engine (`compromise` v14) behind a pluggable `NerEngine` abstraction — closing the largest residual GDPR Art. 5(1)(c) gap on the LLM prompt path (R3, partial — see § Known Limitations).
+A standalone TypeScript PII-redaction library for LLM prompts. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`). **v1.2 adds opt-in PERSON-name redaction** (`sanitizePiiAsync({ enableNer: true })`) via a heuristic NER engine (`compromise` v14) behind a pluggable `NerEngine` abstraction — closing the largest residual GDPR Art. 5(1)(c) gap on the LLM prompt path (R3, partial — see § Known Limitations). **v1.3 adds the additive `profile: 'cv'` option** (`sanitizePii(text, { profile: 'cv' })`) that preserves employment dates for CV/embedding callers — redacting a date only on an explicit DOB cue — while still masking true PII; the default profile stays byte-identical (R11 — see § CV redaction profile).
 
 v1.0.0 was the first release; it provides PII redaction on the LLM prompt path as a GDPR Art. 5(1)(c) / 25 / 32 data-minimisation control.
 
@@ -145,6 +145,35 @@ await sanitizePiiAsync(rawCv, { enableNer: true, tokenFormat: 'sentinel' });
 
 The cohort-1 (Western European) gate is enforced as CI BLOCKING; cohorts 2–4 + FP are benchmark + report only at v1.2. The original ≥95% per-cohort / ≤5pp variance AC is carried forward to the ML-upgrade backlog issue (compliance condition C7).
 
+### CV redaction profile (v1.3 — issue #64)
+
+v1.0–v1.2 shipped a single, one-size-fits-all policy that **over-redacts on CV / résumé text**: (a) every date-shaped string is redacted to `[dob]` — destroying employment start/end dates — and (b) surname-shaped employer names (`Morgan Stanley`, `Ericsson`) are mis-tagged as persons and redacted to `[person]`. Employment dates, employer/organisation names and city/region are the highest-signal **non-personal** features a downstream embedding / job-match consumer depends on (see `jobflow-platform#1424`).
+
+v1.3 adds an additive `profile` option. The `'default'` profile is **byte-identical to v1.2** on every input (this is a SemVer MINOR bump — existing consumers are unaffected). Opt into `'cv'` for CV/embedding text:
+
+```ts
+import { sanitizePii, sanitizePiiAsync } from '@kgn-git/privacy-utils';
+
+// Sync (regex-only): employment dates preserved, DOB-labelled dates still masked.
+sanitizePii('Engineer at Siemens, Munich, 01/06/2018 to 31/08/2021.', { profile: 'cv' });
+// → "Engineer at Siemens, Munich, 01/06/2018 to 31/08/2021."  (dates + employer + city intact)
+sanitizePii('Date of birth: 23/05/1985', { profile: 'cv' });
+// → "Date of birth: [dob]"  (explicit DOB cue → still masked)
+
+// Async (+ NER): applicant name masked; employer / city false-positives preserved.
+await sanitizePiiAsync(cvText, { profile: 'cv', enableNer: true });
+```
+
+Under `'cv'`, the **one** behavioural change vs `'default'` is the date pass:
+
+1. **Dates** are NOT redacted by shape. Only a date carrying an explicit date-of-birth cue (`Date of birth:`, `DOB:`, `born on`, plus the EU-locale birth cues — `né(e) le`, `geboren am`, `nato/nata il`, `nacido/nacida el`, `nascido/nascida em/a`) is redacted (`dobContextCuePattern`). Plain employment dates pass through.
+
+Everything else is **identical to `'default'`**: person name, email, phone, street address, postcode, national ID and a labelled DOB are still masked, and the person-NER pass (`sanitizePiiAsync({ enableNer: true })`) is unchanged. Employer/organisation names and city/region are preserved only insofar as `compromise` does not person-tag them (the common case).
+
+**Why person-NER is not modified under `'cv'`.** An earlier draft suppressed PERSON spans that `compromise` also tagged ORG/PLACE (to rescue surname-shaped employers). It was removed (SD-002 review, PR #66): (a) near-zero benefit — `compromise` tags an employer as *either* person *or* org, almost never both; (b) it **introduced a name-recall leak** — a real person whose given name is also a place/org token (`Paris`, `Austin`, `Georgia`, `Sydney`, `Florence`, `Morgan`, …) would have their `[person]` span suppressed and their name **preserved** into the very embedding this path exists to protect. For a privacy library that trade is net-negative.
+
+**Known limitation — field-aware API is the required follow-up.** Because person-NER is unchanged, a surname-shaped employer that `compromise` person-tags is still redacted to `[person]` under `'cv'`. Empirically (30-employer basket, issue #64) that is ~2/30 real employers (`Morgan Stanley`, `Ericsson`) — an accepted **precision** residual. The robust fix is a **field-aware API**: the platform passes structured CV sections (title / employer / dates / description), so a per-field policy — never run person-NER over the employer field, always run it over the name field — fixes **both** precision (preserve those employers) **and** recall (never leak a name that looks like a place/org). Tracked as the required follow-up for `jobflow-platform#1424`; the `'cv'` profile is the in-library best-effort that lands first and fully resolves the date over-redaction (which was 100% of full-date employment dates).
+
 ### Programmatic pattern access
 
 Pattern exports are **factory functions** — call with `()` to get a fresh `/g` RegExp on every call:
@@ -220,7 +249,7 @@ See GDPR Rationale above for the *compliance basis* behind these choices (Art. 4
 
 Note: unlike the other pattern factories (which return `RegExp`), the `phoneByLocale.*()` factories return a **validator function** `(candidate: string) => boolean` backed by `libphonenumber-js` directly. API-choice rationale is documented inline in `src/patterns.ts` (file-header JSDoc → "Factory API choice: validator over RegExp") and in `docs/Handover-2.md` § Factory API choice.
 
-Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → nationalIds (it, uk, fr, es, pt) → dob → localePhones (fr, de, gb, it, es, pt) → intlPhone → domesticPhone**. This order is mandatory:
+Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → nationalIds (it, uk, fr, es, pt) → dob → localePhones (fr, de, gb, it, es, pt) → intlPhone → domesticPhone**. (Under `profile: 'cv'` — v1.3, issue #64 — the `dob` step redacts only cue-labelled dates via `dobContextCuePattern`; every other step is unchanged.) This order is mandatory:
 
 - Addresses run **before** postcodes so a full structured address like `12 rue de la Paix, 75001 Paris` consumes the street run first; the residual `75001 Paris` is then redacted by the postcode pass.
 - Addresses also run **before** phone so the leading house number is not eaten by the phone pattern.
@@ -248,6 +277,8 @@ v1.1 resolves **R1** (locale-aware postal addresses + bare postcodes for FR/DE/I
 | R10 | ~~National-level identifiers (French NIR, UK NINO, Italian Codice Fiscale, Spanish DNI, Portuguese NIF) not covered. Rare in modern CVs but can occur in regulated sectors.~~ **Resolved in v1.1** for UK/FR/IT/ES/PT via `nationalIdByLocale.{uk,fr,it,es,pt}()` validator factories with check-digit gating (DNI mod-23, NIF mod-11, FR NIR mod-97, IT Codice Fiscale position-weighted check letter); UK NINO regex-only with HMRC invalid-prefix rules. **Member-State framing (Art. 87):** the five identifiers covered are Member-State-issued national identifiers under each respective domestic legal framework — the R10 redaction pass aligns them under the destructive one-way redaction contract. **DE Steuer-ID / Rentenversicherungsnummer deferred to v1.2.** | Medium-Low | **Resolved (UK/FR/IT/ES/PT)** | v1.1 (this release); DE in v1.2 |
 | R10-residual | (a) PT NIF mod-11 has a 1/11 false-positive rate on random 9-digit sequences whose last digit happens to match the computed check digit (`000000000`, `123456789` shaped) — accepted precision trade-off (recall over precision on free CV text). (b) FR NIR Corsica conversion (`2A`/`2B` département codes mapped to `19`/`18` before mod-97) is not implemented — Corsican NIRs will fail validation and pass through. (c) IT Codice Fiscale omocodia (letter substitution on hash collision) not handled — rare edge case. (d) DE Steuer-ID / Rentenversicherungsnummer deferred. (e) Redaction is destructive / one-way — matched bytes are not retained, logged, or returned. | Low | Documented gaps | v1.2 — DE coverage; future — Corsica NIR + IT omocodia per consumer demand |
 | R8 | ~~Replacement tokens `[email]` / `[phone]` / `[address]` / `[postcode]` / `[dob]` collide with user-authored literal strings. Not cryptographically distinguishable from authored text.~~ **Resolved in v1.1** via opt-in `tokenFormat: 'sentinel'` option — produces `<<REDACTED_X>>` low-collision tokens. Default remains `'readable'` (v1.0.0 byte-identical); default swap to sentinel deferred to v2.0 for SemVer. | Low | **Resolved (opt-in)** | v1.1 (this release) |
+| R11 | ~~Over-redaction on CV text: every date-shaped string → `[dob]` (destroys employment dates).~~ **Addressed in v1.3** via the additive `profile: 'cv'` option — dates redacted only on an explicit DOB cue (`dobContextCuePattern`); plain employment dates pass through. Person-NER is unchanged under `'cv'` (see residual + § CV redaction profile). Default profile byte-identical. | High | **Addressed (v1.3, opt-in)** | v1.3 (this release) |
+| R11-residual | Because person-NER is unchanged under `'cv'`, a surname-shaped employer that `compromise` person-tags (~2/30 real employers — `Morgan Stanley`, `Ericsson`) is still redacted to `[person]` (accepted precision gap). An overlap-suppression mechanism was considered and **rejected** (it leaked the names of real people whose given name is also a place/org token — `Paris`, `Morgan`, … — a recall regression). The robust fix is a **field-aware API** (per-field policy over the platform's structured CV sections — never run person-NER over the employer field, always over the name field), fixing both precision and recall. Tracked as the required follow-up for `jobflow-platform#1424`. | Medium | Documented gap — field-aware API is the follow-up | Follow-up — field-aware redaction API (`jobflow-platform#1424`) |
 
 Both **R1** (v1.1 #1) and **R2** (v1.1 #2) are now in-package. Consuming apps no longer need caller-level scrubbing for FR/DE/IT/ES/PT structured addresses, UK/FR/DE/IT/ES/PT postcodes, or any of the six supported phone locales. Existing caller-level pre/post-LLM scrubbing remains a sensible defence-in-depth complement to the middleware.
 

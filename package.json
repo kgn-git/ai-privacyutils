@@ -1,6 +1,6 @@
 {
   "name": "@kgn-git/privacy-utils",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "TypeScript PII-redaction library for LLM prompts. Pure regex pipeline (email/phone/address/postcode/DOB/national-IDs across 6 EU locales) + opt-in heuristic NER for person names. GDPR Art. 5(1)(c)/25/32 minimisation control via Vercel AI SDK middleware.",
   "keywords": [
     "pii",

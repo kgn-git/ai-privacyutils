@@ -219,6 +219,7 @@ export async function sanitizePiiAsync(
   const regexRedacted = sanitizePii(text, {
     tokenFormat: options?.tokenFormat,
     maxInputLength: options?.maxInputLength,
+    profile: options?.profile,
   });
 
   // Fast path: enableNer:false (default) — return regex output verbatim.
@@ -234,6 +235,15 @@ export async function sanitizePiiAsync(
 
   // Run NER on the ORIGINAL text — compromise offsets are invalid on
   // regex-redacted output (constraint 9).
+  //
+  // NOTE (v1.3 — issue #64): the `'cv'` profile does NOT alter the person-NER
+  // pass. An earlier draft suppressed PERSON spans that compromise also tagged
+  // ORG/PLACE, but that INTRODUCED a name-recall leak — a real person whose
+  // given name is also a place/org token (Paris, Austin, Georgia, Morgan, …)
+  // would have their `[person]` span suppressed and their name preserved into
+  // the embedding. For a privacy library that trade is net-negative, so the
+  // suppression was removed (SD-002 review, PR #66). The `'cv'` profile's only
+  // effect is the cue-gated date pass in the sync regex stage above.
   const nerSpans = await engine.detectPersonSpans(text, {
     confidenceThreshold: options.nerConfidenceThreshold,
     allowList: options.nerAllowList,

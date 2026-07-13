@@ -32,8 +32,10 @@ import {
   phoneInternationalPattern,
   phoneDomesticPattern,
   dobPattern,
+  dobContextCuePattern,
 } from './patterns.js';
 import { tokensFor, type TokenFormat } from './token-format.js';
+import type { RedactionProfile } from './profiles.js';
 import {
   DEFAULT_MAX_INPUT_LENGTH,
   PiiInputTooLargeError,
@@ -266,6 +268,26 @@ function redactNationalIds(text: string, token: string): string {
 }
 
 /**
+ * Context-cued DOB redaction for the `'cv'` profile (v1.3 — issue #64).
+ *
+ * Unlike the default profile's `dobPattern()` pass — which redacts EVERY
+ * date-shaped string, destroying employment start/end dates — this pass
+ * redacts a date ONLY when it is immediately preceded by an explicit
+ * date-of-birth cue (`Date of birth:`, `DOB:`, `born on`, and the EU-locale
+ * birth cues; see `dobContextCuePattern`). The cue text is preserved; only
+ * the date group is replaced with `token`.
+ *
+ * Plain employment dates carry no cue and pass through untouched — the whole
+ * point of the `'cv'` profile.
+ */
+function redactContextualDob(text: string, token: string): string {
+  return text.replace(
+    dobContextCuePattern(),
+    (_match, cue: string, sep: string) => `${cue}${sep}${token}`,
+  );
+}
+
+/**
  * Optional configuration for `sanitizePii`.
  *
  * Backward-compat contract: calling `sanitizePii(text)` with no options
@@ -297,6 +319,21 @@ export interface SanitizePiiOptions {
    * the throw-vs-truncate decision and the per-call scope semantics.
    */
   maxInputLength?: number;
+  /**
+   * Redaction profile (v1.3 — issue #64).
+   *
+   *   - `'default'` (default, or `undefined`): v1.2 byte-identical. Every
+   *     date-shaped string is redacted to `[dob]`.
+   *   - `'cv'`: CV / embedding profile. Dates are redacted ONLY when they
+   *     carry an explicit date-of-birth context cue (`Date of birth:`,
+   *     `DOB:`, `born on`, and EU-locale birth cues); plain employment
+   *     start/end dates pass through. Everything else — email / phone /
+   *     address / postcode / national-ID redaction AND the person-NER pass
+   *     (`sanitizePiiAsync`) — is IDENTICAL to `'default'`.
+   *
+   * See `./profiles.ts` for the full profile contract + known limitation.
+   */
+  profile?: RedactionProfile;
 }
 
 /**
@@ -449,7 +486,16 @@ export function sanitizePii(
   //    and other locales. DOB's regex is precise enough that it cannot
   //    mis-match NANP or EU-formatted phone numbers (see header comment
   //    justification (i)-(iii)).
-  out = out.replace(dobPattern(), tokens.dob);
+  //
+  //    Profile branch (v1.3 — issue #64): the `'cv'` profile redacts a date
+  //    ONLY when it carries an explicit DOB context cue (employment dates are
+  //    preserved). The default profile redacts every date shape (byte-identical
+  //    to v1.2).
+  if (options?.profile === 'cv') {
+    out = redactContextualDob(out, tokens.dob);
+  } else {
+    out = out.replace(dobPattern(), tokens.dob);
+  }
 
   // 6. Locale-aware phones (FR/DE/GB/IT/ES/PT) BEFORE NANP fallback.
   out = redactLocalePhones(out, tokens.phone);

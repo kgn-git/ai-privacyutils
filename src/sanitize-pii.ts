@@ -34,6 +34,7 @@ import {
   dobPattern,
 } from './patterns.js';
 import { tokensFor, type TokenFormat } from './token-format.js';
+import type { RedactionProfile } from './profiles.js';
 import {
   DEFAULT_MAX_INPUT_LENGTH,
   PiiInputTooLargeError,
@@ -297,6 +298,22 @@ export interface SanitizePiiOptions {
    * the throw-vs-truncate decision and the per-call scope semantics.
    */
   maxInputLength?: number;
+  /**
+   * Redaction profile (v1.3 — issue #64).
+   *
+   *   - `'default'` (default, or `undefined`): v1.2 byte-identical. Every
+   *     date-shaped string is redacted to `[dob]`.
+   *   - `'cv'`: CV / embedding profile. Dates are redacted ONLY when they
+   *     carry an explicit date-of-birth context cue (`Date of birth:`,
+   *     `DOB:`, `born on`, and EU-locale birth cues); plain employment
+   *     start/end dates pass through. Email / phone / address / postcode /
+   *     national-ID redaction is unchanged. In the async path
+   *     (`sanitizePiiAsync`), the `'cv'` profile also suppresses
+   *     person-NER hits that compromise tags as organisations or places.
+   *
+   * See `./profiles.ts` for the full profile contract + known limitation.
+   */
+  profile?: RedactionProfile;
 }
 
 /**

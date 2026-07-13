@@ -190,28 +190,6 @@ export function applyNerRedactions(
 }
 
 /**
- * Suppress PERSON spans that overlap a "preserve" (ORG / PLACE) span
- * (v1.3 — issue #64, `'cv'` profile).
- *
- * Two half-open ranges `[a.start, a.end)` and `[b.start, b.end)` overlap iff
- * `a.start < b.end && b.start < a.end`. A person span is dropped if it overlaps
- * ANY preserve span — so a surname-shaped employer that compromise dual-tags,
- * or a place, is preserved rather than redacted to `[person]`.
- */
-function suppressOverlapping(
-  personSpans: ReadonlyArray<NerSpan>,
-  preserveSpans: ReadonlyArray<NerSpan>,
-): ReadonlyArray<NerSpan> {
-  if (preserveSpans.length === 0) return personSpans;
-  return personSpans.filter(
-    (p) =>
-      !preserveSpans.some(
-        (keep) => p.start < keep.end && keep.start < p.end,
-      ),
-  );
-}
-
-/**
  * Sanitise PII from arbitrary text — async path with optional NER name
  * redaction (v1.2 — issue #42).
  *
@@ -257,24 +235,19 @@ export async function sanitizePiiAsync(
 
   // Run NER on the ORIGINAL text — compromise offsets are invalid on
   // regex-redacted output (constraint 9).
-  let nerSpans = await engine.detectPersonSpans(text, {
+  //
+  // NOTE (v1.3 — issue #64): the `'cv'` profile does NOT alter the person-NER
+  // pass. An earlier draft suppressed PERSON spans that compromise also tagged
+  // ORG/PLACE, but that INTRODUCED a name-recall leak — a real person whose
+  // given name is also a place/org token (Paris, Austin, Georgia, Morgan, …)
+  // would have their `[person]` span suppressed and their name preserved into
+  // the embedding. For a privacy library that trade is net-negative, so the
+  // suppression was removed (SD-002 review, PR #66). The `'cv'` profile's only
+  // effect is the cue-gated date pass in the sync regex stage above.
+  const nerSpans = await engine.detectPersonSpans(text, {
     confidenceThreshold: options.nerConfidenceThreshold,
     allowList: options.nerAllowList,
   });
-
-  // `'cv'` profile (v1.3 — issue #64): preserve employer / organisation and
-  // city / region false-positives by suppressing PERSON spans that the engine
-  // ALSO tags as an organisation or place. Engines without `detectPreserveSpans`
-  // (e.g. a minimal custom engine) skip this — the person pass is unchanged.
-  if (
-    options.profile === 'cv' &&
-    typeof engine.detectPreserveSpans === 'function'
-  ) {
-    const preserveSpans = await engine.detectPreserveSpans(text, {
-      confidenceThreshold: options.nerConfidenceThreshold,
-    });
-    nerSpans = suppressOverlapping(nerSpans, preserveSpans);
-  }
 
   const tokens = tokensFor(options.tokenFormat);
   return applyNerRedactions(text, nerSpans, regexRedacted, tokens.person);

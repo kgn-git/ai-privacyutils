@@ -122,27 +122,6 @@ export interface NerEngine {
   ): Promise<ReadonlyArray<NerSpan>>;
 
   /**
-   * OPTIONAL (v1.3 — issue #64). Detect "preserve" spans — entities that the
-   * `'cv'` redaction profile should NOT redact even if `detectPersonSpans`
-   * also flags them: organisations (`label: 'ORG'`) and places
-   * (`label: 'PLACE'`). Surname-shaped employer names ("Morgan Stanley") and
-   * city names are high-signal, NON-personal CV features that a downstream
-   * embedding / job-match consumer depends on.
-   *
-   * `sanitizePiiAsync({ profile: 'cv', enableNer: true })` calls this (when the
-   * engine implements it) and suppresses any PERSON span that overlaps a
-   * preserve span. Engines that do not implement it are treated as returning
-   * `[]` (no suppression) — the person pass is unchanged.
-   *
-   * Same GDPR contract as `detectPersonSpans`: returns byte ranges only, never
-   * the matched substring.
-   */
-  detectPreserveSpans?(
-    text: string,
-    opts?: NerDetectOptions,
-  ): Promise<ReadonlyArray<NerSpan>>;
-
-  /**
    * Resolves once the engine is ready to handle `detectPersonSpans` calls.
    *
    * `CompromiseNerEngine` resolves after the first dynamic `import('compromise')`

@@ -327,10 +327,9 @@ export interface SanitizePiiOptions {
    *   - `'cv'`: CV / embedding profile. Dates are redacted ONLY when they
    *     carry an explicit date-of-birth context cue (`Date of birth:`,
    *     `DOB:`, `born on`, and EU-locale birth cues); plain employment
-   *     start/end dates pass through. Email / phone / address / postcode /
-   *     national-ID redaction is unchanged. In the async path
-   *     (`sanitizePiiAsync`), the `'cv'` profile also suppresses
-   *     person-NER hits that compromise tags as organisations or places.
+   *     start/end dates pass through. Everything else — email / phone /
+   *     address / postcode / national-ID redaction AND the person-NER pass
+   *     (`sanitizePiiAsync`) — is IDENTICAL to `'default'`.
    *
    * See `./profiles.ts` for the full profile contract + known limitation.
    */

@@ -1,23 +1,23 @@
 /**
  * CV redaction profile (v1.3 — issue #64).
  *
- * The `'cv'` profile preserves the highest-signal, NON-personal CV features
- * (employment dates, employer/organisation names, city/region) that a
- * downstream embedding / job-match consumer depends on, while STILL masking
- * true PII (person name, email, phone, street address, postcode, national
- * ID, and an explicitly-labelled date of birth).
+ * The `'cv'` profile preserves employment dates (its one behavioural change:
+ * a cue-gated DOB pass) and, passively, employer/organisation names and
+ * city/region (compromise mostly does not person-tag them), while STILL
+ * masking true PII (person name, email, phone, street address, postcode,
+ * national ID, and an explicitly-labelled date of birth).
  *
  * Test groups:
  *   1. CV-preserve (sync): full employment dates + regex-safe employers +
  *      cities pass through intact under `{ profile: 'cv' }`.
- *   2. CV-preserve (async + NER): applicant name masked, employer/org +
- *      city preserved, employment dates preserved.
+ *   2. CV-preserve (async + NER): applicant name masked; employer + city
+ *      passed through (not person-tagged); employment dates preserved.
  *   3. PII-guard (async + NER): true PII STILL masked under `'cv'` — the fix
  *      must not weaken redaction recall.
  *   4. Labelled DOB still masked under `'cv'` (sync + async).
  *   5. Default-profile unchanged — pins v1.2 byte-identical behaviour.
- *   6. Org / place overlap-suppression algorithm (deterministic, mock engine).
- *   7. Documented known limitation — person-shaped employer still redacted.
+ *   6. Person-NER pass unchanged — accepted residual (person-tagged employer
+ *      still redacted) + recall safety (cv person-redaction === default).
  *
  * See `src/profiles.ts` for the profile contract.
  */
@@ -29,22 +29,16 @@ import { sanitizePiiAsync } from '../sanitize-pii-async.js';
 import type { NerEngine, NerSpan } from '../ner/ner-engine.js';
 
 /**
- * Deterministic engine emitting caller-supplied PERSON spans and optional
- * ORG/PLACE "preserve" spans — exercises the cv-profile suppression path
- * without loading compromise.
+ * Deterministic engine emitting caller-supplied PERSON spans without loading
+ * compromise. The `'cv'` profile does NOT change the person-NER pass, so the
+ * mock only needs to supply person spans.
  */
 class MockNerEngine implements NerEngine {
   public readonly engineId = 'mock';
   public readonly ready = Promise.resolve();
-  constructor(
-    private readonly personSpans: ReadonlyArray<NerSpan>,
-    private readonly preserveSpans: ReadonlyArray<NerSpan> = [],
-  ) {}
+  constructor(private readonly personSpans: ReadonlyArray<NerSpan>) {}
   async detectPersonSpans(): Promise<ReadonlyArray<NerSpan>> {
     return this.personSpans;
-  }
-  async detectPreserveSpans(): Promise<ReadonlyArray<NerSpan>> {
-    return this.preserveSpans;
   }
 }
 
@@ -132,7 +126,7 @@ describe('cv profile — PII-guard (async + NER): true PII still masked', () => 
     expect(out).toContain('[postcode]');
     expect(out).not.toContain('SW1A 1AA');
     expect(out).toContain('[nationalId]');
-    expect(out).not.toContain('QQ123456C');
+    expect(out).not.toContain('AB123456C');
   });
 
   it('does not regress PII recall vs the default profile (same true-PII tokens present)', async () => {
@@ -216,51 +210,62 @@ describe('cv profile — default profile unchanged (byte-identical pin)', () => 
   });
 });
 
-describe('cv profile — org/place overlap-suppression (deterministic)', () => {
-  it('suppresses a PERSON span that overlaps an ORG preserve span', async () => {
+describe('cv profile — person-NER pass is unchanged (accepted residual + recall safety)', () => {
+  // The `'cv'` profile deliberately does NOT alter person-NER. An earlier draft
+  // suppressed PERSON spans that compromise also tagged ORG/PLACE; that was
+  // removed (SD-002, PR #66) because it leaked the names of real people whose
+  // given name is also a place/org token (Paris, Austin, Morgan, …) into the
+  // embedding. These tests pin the resulting contract:
+  //   (a) accepted residual — a person-tagged employer IS still redacted (the
+  //       robust fix for that precision gap is the field-aware API follow-up,
+  //       jobflow-platform#1424);
+  //   (b) recall safety — a person span is redacted under 'cv' exactly as under
+  //       'default', regardless of any org/place shape.
+
+  it('accepted residual: a person-tagged employer is STILL redacted under cv', async () => {
+    // "Morgan Stanley" is the ~2/30 employer class compromise person-tags. The
+    // cv profile does not rescue it — redaction (recall) is preserved. Robust
+    // preservation requires the field-aware API (jobflow-platform#1424).
     const text = 'Worked at Morgan Stanley in 2019.';
     const start = text.indexOf('Morgan Stanley');
     const end = start + 'Morgan Stanley'.length;
-    // Person span AND a preserve (ORG) span cover the same range.
-    const engine = new MockNerEngine(
-      [{ start, end, score: 1.0, label: 'PERSON' }],
-      [{ start, end, score: 1.0, label: 'ORG' }],
-    );
+    const engine = new MockNerEngine([
+      { start, end, score: 1.0, label: 'PERSON' },
+    ]);
     const out = await sanitizePiiAsync(text, {
       profile: 'cv',
       enableNer: true,
       nerEngine: engine,
     });
-    // ORG-tagged → preserved, NOT redacted to [person].
-    expect(out).toContain('Morgan Stanley');
-    expect(out).not.toContain('[person]');
-  });
-
-  it('does NOT suppress under the default profile (preserve spans ignored)', async () => {
-    const text = 'Worked at Morgan Stanley in 2019.';
-    const start = text.indexOf('Morgan Stanley');
-    const end = start + 'Morgan Stanley'.length;
-    const engine = new MockNerEngine(
-      [{ start, end, score: 1.0, label: 'PERSON' }],
-      [{ start, end, score: 1.0, label: 'ORG' }],
-    );
-    const out = await sanitizePiiAsync(text, {
-      enableNer: true,
-      nerEngine: engine,
-    });
-    // Default profile: person span redacted regardless of preserve spans.
     expect(out).toContain('[person]');
     expect(out).not.toContain('Morgan Stanley');
   });
 
-  it('a person span with no overlapping preserve span is still redacted under cv', async () => {
+  it('recall safety: person redaction under cv is identical to default', async () => {
+    const text = 'Worked at Morgan Stanley in 2019.';
+    const start = text.indexOf('Morgan Stanley');
+    const end = start + 'Morgan Stanley'.length;
+    const spans = [{ start, end, score: 1.0, label: 'PERSON' }];
+    const cvOut = await sanitizePiiAsync(text, {
+      profile: 'cv',
+      enableNer: true,
+      nerEngine: new MockNerEngine(spans),
+    });
+    const defaultOut = await sanitizePiiAsync(text, {
+      enableNer: true,
+      nerEngine: new MockNerEngine(spans),
+    });
+    expect(cvOut).toBe(defaultOut);
+    expect(cvOut).toContain('[person]');
+  });
+
+  it('a person span is still redacted under cv (referee name)', async () => {
     const text = 'Referee: Alice Brown.';
     const start = text.indexOf('Alice Brown');
     const end = start + 'Alice Brown'.length;
-    const engine = new MockNerEngine(
-      [{ start, end, score: 1.0, label: 'PERSON' }],
-      [], // no preserve spans
-    );
+    const engine = new MockNerEngine([
+      { start, end, score: 1.0, label: 'PERSON' },
+    ]);
     const out = await sanitizePiiAsync(text, {
       profile: 'cv',
       enableNer: true,

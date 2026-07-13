@@ -116,6 +116,17 @@ N/A in this repo (library). Downstream, once `jobflow-platform#1424` opts into `
   - Org/place overlap-suppression (deterministic mock engine): overlap → suppressed; default profile ignores preserve spans; non-overlapping person span still redacted.
 - E2E: N/A (library).
 
+## SD-002 review delta (2026-07-13, PR #66)
+
+SD-002 returned APPROVE-WITH-NITS and surfaced a real privacy-recall leak. Two required changes applied on this branch:
+
+1. **Removed the org/place overlap-suppression entirely** — `CompromiseNerEngine.detectPreserveSpans` + `collectOffsetSpans`, the `NerEngine.detectPreserveSpans` optional method, the `NlpFn` `organizations`/`places` additions, and `suppressOverlapping` + its wiring in `sanitizePiiAsync`. Rationale: (a) near-zero benefit (employers are almost never both person- AND org-tagged); (b) it INTRODUCED a name-recall leak — a real person whose given name is also a place/org token (Paris, Austin, Georgia, Morgan, …) would have their `[person]` span suppressed and their name preserved into the embedding. Net-negative for a privacy library. The `'cv'` profile now has exactly ONE behavioural change vs default: the cue-gated date pass (`dobContextCuePattern`). Person-NER is unchanged.
+2. **Fixed a tautological test assertion** — the PII-guard NINO guard read `not.toContain('QQ123456C')` while the input is `AB123456C` (never present → vacuously true). Corrected to `not.toContain('AB123456C')`.
+
+Docs updated accordingly: `src/profiles.ts`, README § CV redaction profile + R11 / R11-residual (residual reframed as an accepted **precision** gap; field-aware API is the robust fix for **both** precision and recall; suppression documented as considered-and-rejected). The deterministic Morgan-Stanley test now ASSERTS the accepted residual (person-tagged employer still redacted) + a recall-safety pin (cv person-redaction === default).
+
+**Post-delta gates:** full suite 377/378 (same pre-existing perf-microbenchmark flake), build PASS, lint PASS, ReDoS scan PASS. Test count unchanged at 17 (cv-profile.test.ts). No new runtime surface; compromise `.organizations()`/`.places()` no longer referenced.
+
 ## Handover To
 
-→ dispatcher (`/project-manager`) for SD-002 code review (`jobflow-code-reviewer`) then sprint-close.
+→ dispatcher (`/project-manager`) for SD-002 re-review of the delta, then sprint-close.

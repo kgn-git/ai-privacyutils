@@ -176,17 +176,10 @@ export class PiiNerLoadError extends Error {
  * across `detectPersonSpans` calls so the dynamic import + module parse is
  * paid once per warm Vercel function instance.
  */
-type OffsetView = {
-  out: (mode: 'offsets') => unknown;
-};
-
 type NlpFn = (text: string) => {
-  people: () => OffsetView;
-  // v1.3 — issue #64: the default (`three`) compromise build exposes
-  // organisation + place taggers. Used by `detectPreserveSpans` to build the
-  // `'cv'`-profile preserve set (employer / city false-positives).
-  organizations: () => OffsetView;
-  places: () => OffsetView;
+  people: () => {
+    out: (mode: 'offsets') => unknown;
+  };
 };
 
 let nlpSingleton: NlpFn | null = null;
@@ -343,78 +336,5 @@ export class CompromiseNerEngine implements NerEngine {
       out.push({ start: offset.start, end, score: 1.0, label: 'PERSON' });
     }
     return out;
-  }
-
-  /**
-   * Detect ORG + PLACE "preserve" spans (v1.3 — issue #64) for the `'cv'`
-   * redaction profile.
-   *
-   * The default (`three`) compromise build tags organisations via
-   * `.organizations()` and places via `.places()`. Employer names ("Siemens",
-   * "Ford") and city names ("Munich", "Manchester") land here. The caller
-   * (`sanitizePiiAsync` under `profile: 'cv'`) suppresses any PERSON span that
-   * overlaps one of these ranges, so an org / location false-positive is
-   * preserved rather than redacted to `[person]`.
-   *
-   * COMPLIANCE: same as `detectPersonSpans` — destructure only `{offset}`;
-   * the matched substring is a local-only variable, never returned or logged.
-   *
-   * Defensive: if a future compromise build drops `.organizations()` /
-   * `.places()`, the missing tagger contributes no spans (the person pass is
-   * simply not suppressed) rather than throwing — org/place preservation is a
-   * best-effort precision improvement, not a redaction-recall guarantee.
-   */
-  async detectPreserveSpans(
-    text: string,
-  ): Promise<ReadonlyArray<NerSpan>> {
-    if (text === '' || text == null) return [];
-
-    const nlp = await loadCompromise();
-    const doc = nlp(text);
-
-    const out: NerSpan[] = [];
-    // Call each tagger DIRECTLY (not via an extracted `doc[method]` reference —
-    // compromise view methods rely on `this`, which a detached call loses).
-    // Each is wrapped in try/catch so a future compromise build that changes
-    // or drops a tagger degrades to "no preserve spans for that label" rather
-    // than throwing — org/place preservation is best-effort precision, not a
-    // redaction-recall guarantee.
-    this.collectOffsetSpans(() => doc.organizations(), text, 'ORG', out);
-    this.collectOffsetSpans(() => doc.places(), text, 'PLACE', out);
-    return out;
-  }
-
-  /**
-   * Append trailing-punct-stripped spans from a compromise offset view to
-   * `out`. COMPLIANCE: the matched substring is a local-only variable, never
-   * returned or logged — only byte ranges leave this method.
-   */
-  private collectOffsetSpans(
-    getView: () => { out: (mode: 'offsets') => unknown },
-    text: string,
-    label: string,
-    out: NerSpan[],
-  ): void {
-    let raw: ReadonlyArray<{ offset: { start: number; length: number } }>;
-    try {
-      raw = getView().out('offsets') as ReadonlyArray<{
-        offset: { start: number; length: number };
-      }>;
-    } catch {
-      return; // tagger missing / changed — best-effort, contribute nothing
-    }
-    for (const item of raw) {
-      const { offset } = item;
-      const matchedLocalOnly = text.slice(
-        offset.start,
-        offset.start + offset.length,
-      );
-      const stripped = matchedLocalOnly
-        .replace(TRAILING_PUNCT_RE, '')
-        .replace(/\.$/, '');
-      const end = offset.start + stripped.length;
-      if (end <= offset.start) continue; // empty span guard
-      out.push({ start: offset.start, end, score: 1.0, label });
-    }
   }
 }

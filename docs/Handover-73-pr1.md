@@ -59,6 +59,10 @@
 
 - Verdict: pending dispatcher review
 
+## CI on PR #74 (run 34053602717, 2026-09-06 19:02 UTC)
+
+`lint`, `typecheck`, `redos-scan`, `audit`, `dependency-review`, CodeQL: **pass**. `test`: **fail** — the same `locale-patterns.test.ts:567` benchmark, 23.5 ms under `vitest run --coverage` on the GitHub runner, everything else 386/386. **Pre-existing on `main`:** the CI run for `d4b2c35` itself (29237354596, 2026-07-13) fails the `test` job on the identical assertion (28.07 ms), and the last five `main` runs back to 2026-04-30 are all `failure`; PR #66's `test` job failed the same way. Not fixed here — it is a test-file edit, outside PR-1's behaviour-frozen scope and against the test-file-diff = ∅ invariant. **Decision owed to the dispatcher/founder:** the `test` CI job cannot go green on any PR until the benchmark's threshold or its CI-gating status is ruled (options: raise the ceiling for the coverage-instrumented CI run; run the benchmark outside the gating suite; keep it as a measured, non-gating benchmark like the NER cohort tests).
+
 ## Known tech debt / process notes
 
 - `locale-patterns.test.ts:567` timing benchmark is host-contention-sensitive under the full parallel run (fails on baseline and branch alike on this host today); pre-existing, outside this PR's scope.

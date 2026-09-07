@@ -17,6 +17,7 @@ export default [
       redos,
     },
     rules: {
+      'max-lines': ['error', { max: 550, skipBlankLines: true, skipComments: true }],
       'redos/no-vulnerable': ['error', { timeout: 10000 }],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',

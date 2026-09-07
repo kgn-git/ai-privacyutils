@@ -63,6 +63,12 @@ Gates: `npx vitest run` → `Test Files 1 failed / 17 passed (18)` · `Tests 1 f
 
 `lint` (eslint, then `comment-ratio: 17 of 35 in-scope files over the line at HEAD 0914a3d, 17 of 30 at base 54113fb (origin/main tip, shallow clone) — pass`), `typecheck`, `redos-scan`, `audit`, `dependency-review`: **pass**. `test`: **fail** on the same `locale-patterns.test.ts:567` benchmark (23.9 ms on the runner), `Test Files 1 failed | 17 passed (18)` — the ratio e2e ran green on the runner.
 
+## Fix round — SD-002 round 1 (M-1, m-1, m-2, m-4), `d74dd4a` → `0977a63`
+
+- **M-1** — the shallow fallback is removed: `resolveBase` returns only `git merge-base`, and a clone with no reachable merge base exits 2 naming `fetch-depth: 0`; the `lint` job checks out full history and fetches `main` without `--depth=1`. The e2e case *a shallow clone whose base advanced after the branch point blocks with exit 2 naming fetch-depth: 0 — never a pass at the tip* exited 0 on the unfixed script (the false pass, on a real clone) and exits 2 after; its twin *the same history in a full clone, as CI checks out, is measured at the merge base: the file is new there (exit 1)* pins the CI shape.
+- **m-1** `file://${repo}` URL (the old shape also passed on this host, git 2.52.0.windows.1) · **m-2** `head.size === 0` → exit 2, unit-pinned · **m-4** 82 base code lines, by `strip-comments.mjs` on the base blob.
+- CI run 34107994599 @ `0977a63`: `lint` — `comment-ratio: 17 of 35 in-scope files over the line at HEAD 0039d7f, 17 of 30 at base 54113fb (merge base with origin/main) — pass`; `typecheck`, `redos-scan`, `audit`, `dependency-review` pass; `test` fails on the same benchmark (21.2 ms), with `comment-ratio.test.ts` 32/32 and `comment-ratio.e2e.test.ts` 10/10 on the runner. Host: `npx vitest run` 439/440 (the benchmark, 17.9 ms) · lint clean · tsc 24 == 24, all in `src/__tests__`.
+
 ## Code Review (left blank — dispatcher populates after SD-002 review)
 
 - Verdict: pending dispatcher review

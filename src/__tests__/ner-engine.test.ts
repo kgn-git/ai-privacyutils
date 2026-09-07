@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as ts from 'typescript';
 
 import type { NerEngine, NerSpan, NerDetectOptions } from '../ner/ner-engine.js';
 import { NullNerEngine } from '../ner/null-ner-engine.js';
@@ -131,7 +132,19 @@ describe('compromise is loaded only dynamically', () => {
     walk(root);
     expect(files.length).toBeGreaterThan(10);
     for (const f of files) {
-      expect(readFileSync(f, 'utf8')).not.toMatch(/^\s*import\b[^;]*['"]compromise['"]/m);
+      const sf = ts.createSourceFile(f, readFileSync(f, 'utf8'), ts.ScriptTarget.Latest, true);
+      const staticImports: string[] = [];
+      sf.forEachChild((node) => {
+        if (
+          (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+          node.moduleSpecifier !== undefined &&
+          ts.isStringLiteral(node.moduleSpecifier) &&
+          node.moduleSpecifier.text === 'compromise'
+        ) {
+          staticImports.push(node.getText(sf));
+        }
+      });
+      expect(staticImports, f).toEqual([]);
     }
   });
 });

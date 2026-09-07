@@ -35,6 +35,7 @@ import {
   dobContextCuePattern,
 } from './patterns.js';
 import { tokensFor, type TokenFormat } from './token-format.js';
+import { redactRanges, type ByteRange } from './redact-ranges.js';
 import type { RedactionProfile } from './profiles.js';
 import {
   DEFAULT_MAX_INPUT_LENGTH,
@@ -130,7 +131,7 @@ const PHONE_FORMATTED_RE = /^\+|[\s.-]/;
  * for the active token format (v1.1 — issue #9).
  */
 function redactLocalePhones(text: string, phoneToken: string): string {
-  const ranges: Array<{ start: number; end: number }> = [];
+  const ranges: ByteRange[] = [];
 
   for (const country of PHONE_LOCALE_COUNTRIES) {
     try {
@@ -153,29 +154,7 @@ function redactLocalePhones(text: string, phoneToken: string): string {
     }
   }
 
-  if (ranges.length === 0) return text;
-
-  // De-duplicate + merge overlapping ranges. Sort by `start` ascending
-  // then `end` descending so nested ranges are picked up by the first
-  // iteration.
-  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
-  const merged: Array<{ start: number; end: number }> = [];
-  for (const r of ranges) {
-    const last = merged[merged.length - 1];
-    if (last && r.start <= last.end) {
-      if (r.end > last.end) last.end = r.end;
-    } else {
-      merged.push({ ...r });
-    }
-  }
-
-  // Replace in reverse order so earlier positions remain valid.
-  let out = text;
-  for (let i = merged.length - 1; i >= 0; i -= 1) {
-    const { start, end } = merged[i]!;
-    out = out.slice(0, start) + phoneToken + out.slice(end);
-  }
-  return out;
+  return redactRanges(text, ranges, phoneToken);
 }
 
 /**
@@ -227,7 +206,7 @@ const NATIONAL_ID_LOCALES: ReadonlyArray<{
 ];
 
 function redactNationalIds(text: string, token: string): string {
-  const ranges: Array<{ start: number; end: number }> = [];
+  const ranges: ByteRange[] = [];
 
   for (const { extract, validate } of NATIONAL_ID_LOCALES) {
     const re = extract();
@@ -246,25 +225,7 @@ function redactNationalIds(text: string, token: string): string {
     }
   }
 
-  if (ranges.length === 0) return text;
-
-  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
-  const merged: Array<{ start: number; end: number }> = [];
-  for (const r of ranges) {
-    const last = merged[merged.length - 1];
-    if (last && r.start <= last.end) {
-      if (r.end > last.end) last.end = r.end;
-    } else {
-      merged.push({ ...r });
-    }
-  }
-
-  let out = text;
-  for (let i = merged.length - 1; i >= 0; i -= 1) {
-    const { start, end } = merged[i]!;
-    out = out.slice(0, start) + token + out.slice(end);
-  }
-  return out;
+  return redactRanges(text, ranges, token);
 }
 
 /**

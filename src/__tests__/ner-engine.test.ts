@@ -1,12 +1,5 @@
-/**
- * NerEngine interface + NullNerEngine contract tests.
- *
- * These tests pin the public NerEngine surface so that any future engine
- * (CompromiseNerEngine, future ML-backed engines) can be swapped in without
- * a breaking API change. NullNerEngine is the no-op fast-path used when
- * `enableNer: false` (the v1.2 default) — it must never load `compromise`
- * or any other heavy dependency, and must always return [].
- */
+// The public `NerEngine` surface, the `NullNerEngine` no-op, and the rule that `compromise` is never a static
+// import anywhere in src.
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -20,11 +13,7 @@ import { createNerEngine, type NerConfig } from '../ner/index.js';
 
 describe('NerEngine interface', () => {
   it('NerSpan has only {start, end, score, label} — no matched text', () => {
-    // Compile-time check: NerSpan is the public surface returned to consumers.
-    // Including the matched text would leak PII through the return value
-    // (security-expert C3). The type is enforced by TypeScript at this
-    // import site; a runtime spread test confirms only the four fields are
-    // expected by consumers.
+    // Compile-time surface: the four fields only, never the matched text (C3).
     const span: NerSpan = { start: 0, end: 5, score: 1.0, label: 'PERSON' };
     const keys = Object.keys(span).sort();
     expect(keys).toEqual(['end', 'label', 'score', 'start']);
@@ -78,16 +67,12 @@ describe('NullNerEngine', () => {
   });
 
   it('NullNerEngine never loads compromise (verified by import-graph absence)', async () => {
-    // NullNerEngine is the enableNer:false fast-path. It MUST NOT import
-    // `compromise` (344 KB ESM) — even transitively. This test is a behavioural
-    // proxy: NullNerEngine instantiates synchronously and returns [] in zero
-    // async ticks beyond Promise.resolve.
+    // Behavioural proxy: a `compromise` first load takes hundreds of ms; the null engine answers within one tick.
     const t0 = Date.now();
     const e = new NullNerEngine();
     const spans = await e.detectPersonSpans('Alice Brown');
     const dt = Date.now() - t0;
     expect(spans).toEqual([]);
-    // Hard upper bound; compromise's first-load takes hundreds of ms.
     expect(dt).toBeLessThan(50);
   });
 });

@@ -10,31 +10,12 @@ import {
 } from '../patterns.js';
 import type { TokenFormat } from '../token-format.js';
 
-/**
- * Test suite for the `tokenFormat` option (v1.1 — issue #9 / compliance §R8).
- *
- * Design contract:
- *
- *   sanitizePii(text, options?)  — options = { tokenFormat?: 'readable' | 'sentinel' }
- *     - default 'readable' produces v1.0.0 byte-identical output
- *     - 'sentinel' produces low-collision `<<REDACTED_X>>` tokens
- *
- *   createPiiMiddleware(options?) — factory returning LanguageModelV1Middleware
- *     - `piiMiddleware` (exported const) === `createPiiMiddleware()` (default 'readable')
- *     - `createPiiMiddleware({ tokenFormat: 'sentinel' })` threads through to sanitizePii
- *
- * These tests are authored in a RED commit before the GREEN implementation
- * commit (SI-001 — TDD RED → GREEN discipline).
- */
-
 function textPart(text: string): { type: 'text'; text: string } {
   return { type: 'text', text };
 }
 
 describe('tokenFormat — type surface', () => {
   it('exports TokenFormat as a union of readable | sentinel', () => {
-    // Compile-time only check. If the type export breaks this file stops
-    // compiling, giving us an early signal.
     const a: TokenFormat = 'readable';
     const b: TokenFormat = 'sentinel';
     expect([a, b]).toEqual(['readable', 'sentinel']);
@@ -59,9 +40,6 @@ describe('sanitizePii — default (readable) is v1.0.0 byte-identical', () => {
   });
 
   it('produces readable tokens across all token types by default', () => {
-    // Extended in v1.2 SD-002 fix-cycle (I2): also covers `[nationalId]`
-    // — UK NINO `AB123456C` — and asserts the sentinel form does NOT leak
-    // into the readable-default output.
     const input =
       'Contact jane@example.com at 42 Baker Street, SW1A 2AA, born 23.05.1985, phone 555-123-4567, NINO AB123456C.';
     const out = sanitizePii(input);
@@ -142,7 +120,6 @@ describe('sanitizePii — sentinel format', () => {
   });
 
   it('produces <<REDACTED_POSTCODE>> for all EU postcode shapes', () => {
-    // 5-digit FR/DE/IT/ES + UK alphanumeric + PT NNNN-NNN
     expect(
       sanitizePii('FR: 75001 Paris.', { tokenFormat: 'sentinel' }),
     ).toContain('<<REDACTED_POSTCODE>>');
@@ -166,7 +143,6 @@ describe('sanitizePii — sentinel format', () => {
     expect(out).toContain('<<REDACTED_POSTCODE>>');
     expect(out).toContain('<<REDACTED_DOB>>');
     expect(out).toContain('<<REDACTED_PHONE>>');
-    // None of the readable tokens leak through.
     expect(out).not.toContain('[email]');
     expect(out).not.toContain('[address]');
     expect(out).not.toContain('[postcode]');
@@ -193,11 +169,7 @@ describe('sanitizePii — idempotency (both formats)', () => {
   });
 
   it('sentinel tokens survive a readable-format second pass unchanged', () => {
-    // Mixed-mode: if a consumer sanitizes once in sentinel and the
-    // downstream path runs default readable sanitize over the same text,
-    // the sentinels must not decay (they must not contain email/phone/
-    // address/dob/postcode shapes that match the readable-format
-    // patterns).
+    // Mixed mode: a sentinel output re-sanitised with the readable default must not decay.
     const sentinelised = sanitizePii(
       'Contact jane@example.com at 42 Baker Street, SW1A 2AA, born 23.05.1985, phone 555-123-4567.',
       { tokenFormat: 'sentinel' },
@@ -207,21 +179,14 @@ describe('sanitizePii — idempotency (both formats)', () => {
   });
 
   it('sentinel tokens do not match any redaction pattern when standalone', () => {
-    // Extended in v1.2 SD-002 fix-cycle (I1a): full 6-token sentinel set
-    // including the new <<REDACTED_NATIONALID>> kind (R10 v1.1).
     const sentinels =
       '<<REDACTED_EMAIL>> <<REDACTED_PHONE>> <<REDACTED_ADDRESS>> <<REDACTED_POSTCODE>> <<REDACTED_DOB>> <<REDACTED_NATIONALID>>';
-    // A second pass in either format must be a strict no-op.
     expect(sanitizePii(sentinels)).toBe(sentinels);
     expect(sanitizePii(sentinels, { tokenFormat: 'sentinel' })).toBe(sentinels);
   });
 
   it('sentinel: national-ID tokens survive double-pass (all 5 shapes — UK/FR/IT/ES/PT)', () => {
-    // I1b (SD-002 fix-cycle on PR #36): explicit T4 PreImplReview gate —
-    // proves sanitizePii(sanitizePii(text, sentinel), sentinel) === once
-    // for inputs containing all 5 national-ID shapes. Fixtures are
-    // computed at runtime via the production check-digit algorithms so
-    // each candidate genuinely passes its validator.
+    // Fixtures are computed by the production check helpers so each candidate genuinely passes its validator.
     const esDniBody = '12345678';
     const esDni = `${esDniBody}${computeEsDniCheckLetter(esDniBody)}`;
     const ptNifBody = '12345678';
@@ -240,7 +205,6 @@ describe('sanitizePii — idempotency (both formats)', () => {
     const once = sanitizePii(input, { tokenFormat: 'sentinel' });
     const twice = sanitizePii(once, { tokenFormat: 'sentinel' });
     expect(twice).toBe(once);
-    // Sanity: at least one redaction did occur — sentinels present in `once`.
     expect(once).toContain('<<REDACTED_NATIONALID>>');
   });
 });

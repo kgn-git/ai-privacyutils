@@ -3,51 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { sanitizePii } from '../sanitize-pii.js';
 import { piiPatterns } from '../patterns.js';
 
-/**
- * Test suite for R1 (locale-aware postal addresses) — v1.1 additive.
- *
- * Closes the largest single recall gap flagged in the v1.0.0 review:
- * v1.0.0 was English-only, number-first; v1.1 adds:
- *
- *   - `piiPatterns.addressByLocale.en()/.fr()/.de()/.it()/.es()/.pt()` —
- *     factory functions per locale (IMP-1 consistent — fresh `/g` RegExp on
- *     every call so programmatic consumers never share `lastIndex` state).
- *   - `piiPatterns.postcodeByLocale.uk()/.fr()/.de()/.it()/.es()/.pt()` —
- *     bare postcode factories. Non-ASCII postcodes (UK alphanumeric, PT
- *     NNNN-NNN) and 5-digit continental codes with a following city-style
- *     capitalized word.
- *
- * Backward-compatibility (documented in `docs/Handover-1.md` § Deviation):
- *
- *   - `piiPatterns.address` is preserved and now aliases
- *     `piiPatterns.addressByLocale.en` — the exported English-only v1.0.0
- *     `addressPattern` function object is the same identity as
- *     `addressByLocale.en`. Every v1.0.0 fixture must remain green.
- *
- * Replacement tokens:
- *   - All locale addresses: `[address]` (same token as v1.0.0; consistent
- *     downstream).
- *   - Bare postcodes: `[postcode]` (NEW token in v1.1; additive — no
- *     collision with existing tokens).
- *
- * Order-of-application (updated in `sanitizePii`):
- *   1. email
- *   2. addresses — all locales (en → fr → de → it → es → pt). Running the
- *      locale union BEFORE postcodes is mandatory: a full French address
- *      like "12 rue de la Paix, 75001 Paris" must have the street run
- *      consumed first, then the residual "75001 Paris" redacted as postcode.
- *   3. postcodes — uk, fr, de, it, es, pt.
- *   4. international phone, 5. domestic phone — unchanged.
- *   6. dob — last, unchanged.
- *
- * Test fixtures are synthetic (no real PII). Street names, postcodes, and
- * city combinations are drawn from public landmarks / non-residential
- * addresses to avoid accidentally reproducing anyone's real home address.
- */
-
-// -----------------------------------------------------------------------
-// Factory API — dictionary shape + IMP-1 freshness invariants
-// -----------------------------------------------------------------------
+// Fixtures are synthetic: public landmarks and non-residential addresses, no real PII.
 
 describe('piiPatterns.addressByLocale — dictionary shape + IMP-1 factories', () => {
   it('exposes en/fr/de/it/es/pt factory functions', () => {
@@ -66,16 +22,12 @@ describe('piiPatterns.addressByLocale — dictionary shape + IMP-1 factories', (
       expect(a).toBeInstanceOf(RegExp);
       expect(a.flags).toContain('g');
       expect(a).not.toBe(b);
-      // Advance lastIndex on `a` and confirm `b` is still fresh.
       a.test('probe');
       expect(b.lastIndex).toBe(0);
     }
   });
 
   it('piiPatterns.address remains callable as the EN factory (backward compat)', () => {
-    // v1.0.0 exported `piiPatterns.address` as the English address factory.
-    // v1.1 aliases it to `piiPatterns.addressByLocale.en`. External callers
-    // of `piiPatterns.address()` must continue to work byte-equivalent.
     expect(typeof piiPatterns.address).toBe('function');
     expect(piiPatterns.address).toBe(piiPatterns.addressByLocale.en);
   });
@@ -103,10 +55,6 @@ describe('piiPatterns.postcodeByLocale — dictionary shape + IMP-1 factories', 
     }
   });
 });
-
-// -----------------------------------------------------------------------
-// Address redaction — per locale (via sanitizePii end-to-end)
-// -----------------------------------------------------------------------
 
 describe('sanitizePii — French addresses (R1)', () => {
   it('redacts "12 rue de la Paix"', () => {
@@ -199,62 +147,26 @@ describe('sanitizePii — Italian addresses (R1)', () => {
 });
 
 describe('sanitizePii — Italian Via false-positive fixtures (#23 MIN-1)', () => {
-  /**
-   * Adversarial cases pinning the precision boundary of `addressItPattern`.
-   *
-   * Source: privacyutils#23 — SD-002 review of PR #22 (R1 locale addresses)
-   * flagged the Italian `Via` prefix as the locale with the highest
-   * false-positive risk. The pattern requires a trailing `\d{1,4}` house
-   * number *after* 1-5 name tokens, which strongly constrains false matches
-   * but does not eliminate them for astronomical / semantic "Via" usages.
-   *
-   * The three pinned cases below document the pattern's current behaviour
-   * so future tuning cannot silently regress either precision or recall.
-   */
+  // The trailing house number is the only structural gate on `addressItPattern`; these cases pin its precision
+  // boundary in both directions.
 
   it('does NOT redact "Via Lattea visible from the observatory" (no trailing house number — pattern precision preserved)', () => {
-    // "Via Lattea" = Italian for "Milky Way" — a common semantic use of
-    // `Via` with a capitalised celestial-body name but no trailing digit.
-    // addressItPattern requires `\s+\d{1,4}\b` at the end; absence of the
-    // digit means no match. Verified empirically before RED→GREEN pin.
+    // "Via Lattea" is the Milky Way; without a trailing digit there is no match.
     expect(
       sanitizePii('Via Lattea visible from the observatory.'),
     ).toBe('Via Lattea visible from the observatory.');
   });
 
   it('does NOT redact lowercase "accessed via port 443" (word-boundary + case discipline)', () => {
-    // Lowercase `via` (preposition) is outside the closed alternation set
-    // of address-prefix keywords which all start with a capital letter
-    // (Via|Viale|Corso|Piazza|...). The leading `\b` and the case-sensitive
-    // alternation together guarantee the English preposition is never
-    // treated as an Italian address keyword. Pinning the negative case
-    // protects against future refactors that might add a case-insensitive
-    // flag or widen the alternation to lowercase forms.
+    // Lowercase `via` is outside the closed, capitalised prefix alternation.
     expect(sanitizePii('accessed via port 443')).toBe(
       'accessed via port 443',
     );
   });
 
   it('DOES redact "Via Lattea 5 telescope array" (privacy-over-precision — structurally ambiguous with a real address)', () => {
-    // Adversarial case. "Via Lattea 5" is structurally indistinguishable
-    // from a legitimate Italian street address: `Via` + capitalised name
-    // + 1-4 digit number. The pattern's precision boundary is "structural
-    // shape", not "semantic meaning" — a regex cannot disambiguate between
-    // a fictional astronomical reference and a real postal address.
-    //
-    // Design decision (pinned here per issue #23): privacy-over-precision.
-    // A one-way redaction library is deliberately conservative — a
-    // false-positive redaction on rare astronomical / semantic "Via X N"
-    // phrases is preferable to a recall gap on a real Italian address.
-    // The downstream cost of a redacted "Via Lattea 5" in a CV-scoring
-    // prompt is zero; the downstream cost of a leaked "Via Roma 15" is
-    // a GDPR Art. 5(1)(c) / Art. 32 incident.
-    //
-    // If this trade ever flips (e.g. a consumer hits material precision
-    // loss on astronomical fixtures), the narrow fix is to require an
-    // Italian city / locality context window after the number — out of
-    // scope for v1.1 patch work. Not changing the pattern here; pinning
-    // the behaviour.
+    // Structurally an address. A false positive here costs nothing downstream; a leaked `Via Roma 15` is an
+    // Art. 5(1)(c) / Art. 32 incident — so the pattern is not tightened.
     expect(sanitizePii('Via Lattea 5 telescope array')).toBe(
       '[address] telescope array',
     );
@@ -319,10 +231,6 @@ describe('sanitizePii — Portuguese addresses (R1)', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// Postcode redaction — per locale
-// -----------------------------------------------------------------------
-
 describe('sanitizePii — UK postcodes (R1)', () => {
   it('redacts "SW1A 2AA" (Westminster-style)', () => {
     expect(sanitizePii('Office at SW1A 2AA for mail.')).toBe(
@@ -361,7 +269,6 @@ describe('sanitizePii — French postcodes (R1)', () => {
   });
 
   it('does not over-redact bare 5-digit numbers without city context', () => {
-    // 12345 as a product code / order number should not be mis-redacted.
     expect(sanitizePii('Order number 12345 placed successfully.')).toBe(
       'Order number 12345 placed successfully.',
     );
@@ -424,17 +331,11 @@ describe('sanitizePii — Portuguese postcodes (R1)', () => {
   });
 
   it('redacts bare PT postcode even without city (4-3 format is distinctive)', () => {
-    // PT postcodes are distinctive enough (NNNN-NNN) that context is not
-    // required to distinguish from generic numbers.
     expect(sanitizePii('Código postal: 1200-195.')).toBe(
       'Código postal: [postcode].',
     );
   });
 });
-
-// -----------------------------------------------------------------------
-// Cross-locale integration — full EU-style CV header
-// -----------------------------------------------------------------------
 
 describe('sanitizePii — multi-locale integration', () => {
   it('redacts a full FR CV header (address + postcode + city + email)', () => {
@@ -444,7 +345,6 @@ describe('sanitizePii — multi-locale integration', () => {
     expect(once).toContain('[address]');
     expect(once).toContain('[postcode]');
     expect(once).toContain('[email]');
-    // Idempotent.
     expect(sanitizePii(once)).toBe(once);
   });
 
@@ -496,10 +396,6 @@ describe('sanitizePii — multi-locale integration', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// Backward compatibility — v1.0.0 fixtures must remain green
-// -----------------------------------------------------------------------
-
 describe('sanitizePii — v1.0.0 backward compatibility (no regression on EN fixtures)', () => {
   it('redacts "42 Baker Street" (EN canonical)', () => {
     expect(sanitizePii('Lived at 42 Baker Street for years.')).toBe(
@@ -527,16 +423,8 @@ describe('sanitizePii — v1.0.0 backward compatibility (no regression on EN fix
   });
 });
 
-// -----------------------------------------------------------------------
-// Benchmark — `sanitizePii` regex-only overhead (AC: <10ms on 10KB prompt)
-//
-// This benchmark measures the regex pipeline cost on a plain 10KB string.
-// It does NOT include the deep-clone / multi-message traversal overhead
-// introduced by `piiMiddleware.transformParams` — that is covered by the
-// middleware-level benchmark in `src/__tests__/pii-middleware.test.ts`
-// (per privacyutils#23 IMP-1 Option b — SD-002 review of PR #22).
-// -----------------------------------------------------------------------
-
+// Regex pipeline cost on a plain 10 KB string; the middleware-level cost (deep clone, message traversal) is
+// measured in pii-middleware.test.ts.
 describe('sanitizePii regex-only — performance budget', () => {
   it('processes a 10KB prompt in under 10ms (mean of 10 runs)', () => {
     // Build a ~10KB prompt by repeating a representative EU CV block.

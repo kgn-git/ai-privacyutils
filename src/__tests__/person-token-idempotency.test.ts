@@ -1,26 +1,5 @@
-/**
- * `[person]` / `<<REDACTED_PERSON>>` idempotency proof (v1.2 — issue #42).
- *
- * Pinpoint-tests the binding constraint #8 from the 2026-04-30 expert review:
- * the new 'person' TokenKind must be pattern-disjoint from all 6 existing
- * TokenKinds. Specifically:
- *
- *   - No `@` → email pattern does not match.
- *   - No digits → phone / DOB / national-ID extraction patterns do not match.
- *   - No leading `\b\d` → EN/DE/IT/ES/PT address + all postcode patterns
- *     do not match.
- *   - No lowercase French street-type keyword (`rue`, `avenue`, `place`,
- *     `boulevard`, `chemin`, `route`) → FR address pattern does not match.
- *   - Compromise's PERSON-entity heuristics emit no span on a
- *     bracket-delimited or sentinel token (no proper-noun first-letter
- *     shape; bracket / `<<` characters are token boundaries to compromise's
- *     tokeniser).
- *
- * Idempotency consequence:
- *   sanitizePii(sanitizePii(text)) === sanitizePii(text)
- *   sanitizePiiAsync(sanitizePiiAsync(text)) === sanitizePiiAsync(text)
- *   for any text containing person redactions in either format.
- */
+// `[person]` and `<<REDACTED_PERSON>>` contain no digit and no `@`, so no regex pattern matches them, and
+// `compromise` does not tag them as names — so a second pass in either format is a no-op.
 
 import { describe, it, expect } from 'vitest';
 
@@ -107,8 +86,6 @@ describe('compromise NER does not detect [person] / <<REDACTED_PERSON>> as a per
     const engine = new CompromiseNerEngine();
     await engine.ready;
     const spans = await engine.detectPersonSpans(`Welcome ${READABLE_PERSON} today.`);
-    // The token must NOT be detected as a name. Any other proper-noun in
-    // the surrounding text (none in this fixture) might still be detected.
     const matched = spans.map((s) =>
       `Welcome ${READABLE_PERSON} today.`.slice(s.start, s.end),
     );

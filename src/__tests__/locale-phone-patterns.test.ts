@@ -3,51 +3,9 @@ import { describe, it, expect } from 'vitest';
 import { sanitizePii } from '../sanitize-pii.js';
 import { piiPatterns } from '../patterns.js';
 
-/**
- * Test suite for R2 (EU mobile phone formats via libphonenumber-js) — v1.1
- * additive.
- *
- * Closes the last major recall gap flagged in the v1.0.0 review: v1.0.0's
- * two phone regex patterns encode NANP (North American) shapes and
- * under-match native EU mobile formats:
- *
- *   - FR: `06 12 34 56 78` (2-2-2-2-2 grouping)
- *   - DE: `030 12345678` (3+8 variable)
- *   - UK: `07911 123456` (5+6)
- *   - IT: `+39 320 1234567` (3+7 after CC)
- *   - ES: `+34 612 34 56 78` (3+2+2+2 after CC)
- *   - PT: `+351 912 345 678` (3+3+3 after CC)
- *
- * v1.1 adds:
- *
- *   - `piiPatterns.phoneByLocale.fr()/.de()/.uk()/.it()/.es()/.pt()` —
- *     factory functions per locale. Each call returns a validator function
- *     `(candidate: string) => boolean` backed by libphonenumber-js
- *     (`isValidPhoneNumber(candidate, <country>)`). Design choice
- *     documented in `docs/Handover-2.md` § Factory API choice.
- *   - `sanitizePii` runs locale-aware phone validation BEFORE the existing
- *     NANP-shape fallback to avoid double-redaction + preserve
- *     order-of-application idempotency.
- *
- * Backward-compatibility (v1.0.0 consumer contract):
- *
- *   - `piiPatterns.phoneInternational()` and `piiPatterns.phoneDomestic()`
- *     remain byte-equivalent NANP-shape regex factories. No semantic change.
- *   - All existing phone fixtures (`555-123-4567`, `(555) 123-4567`,
- *     `+1 555 123 4567`, `+44 555 123 4567`) stay green.
- *
- * Test fixtures are synthetic (no real PII). UK numbers use the Ofcom
- * `07911 xxxxxx` / `020 7946 xxxx` example ranges which pass
- * libphonenumber-js validation + correspond to Ofcom's published "numbers
- * for drama and textbooks"; EU numbers use format-plausible examples that
- * pass national-format validation (they are NOT real subscriber lines).
- * The `07700 900xxx` range (strictly reserved for drama) is NOT used
- * because libphonenumber-js correctly rejects it as invalid.
- */
-
-// -----------------------------------------------------------------------
-// Factory API — dictionary shape + validator contract
-// -----------------------------------------------------------------------
+// Fixtures are synthetic. UK numbers use the Ofcom drama/textbook ranges (`07911 xxxxxx`, `020 7946 xxxx`), which
+// `libphonenumber-js` accepts — the strictly reserved `07700 900xxx` range is rejected by the library and not
+// used; EU numbers are format-plausible, not real subscriber lines.
 
 describe('piiPatterns.phoneByLocale — dictionary shape + validator contract', () => {
   it('exposes fr/de/uk/it/es/pt factory functions', () => {
@@ -65,7 +23,6 @@ describe('piiPatterns.phoneByLocale — dictionary shape + validator contract', 
       const b = piiPatterns.phoneByLocale[locale]();
       expect(typeof a).toBe('function');
       expect(typeof b).toBe('function');
-      // Validator is a (candidate: string) => boolean contract.
       expect(a('not-a-number')).toBe(false);
       expect(b('not-a-number')).toBe(false);
     }
@@ -114,10 +71,6 @@ describe('piiPatterns.phoneByLocale — dictionary shape + validator contract', 
     expect(isValidPt('not-a-number')).toBe(false);
   });
 });
-
-// -----------------------------------------------------------------------
-// sanitizePii — per-locale phone redaction (end-to-end)
-// -----------------------------------------------------------------------
 
 describe('sanitizePii — French phones (R2)', () => {
   it('redacts "06 12 34 56 78" (2-2-2-2-2 grouping)', () => {
@@ -237,10 +190,6 @@ describe('sanitizePii — Portuguese phones (R2)', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// NANP backward-compat — v1.0.0 fixtures must remain green
-// -----------------------------------------------------------------------
-
 describe('sanitizePii — v1.0.0 NANP backward compatibility (R2 must not regress)', () => {
   it('redacts US-style 10-digit phones with hyphens', () => {
     expect(sanitizePii('Call 555-123-4567 tomorrow.')).toBe(
@@ -277,10 +226,6 @@ describe('sanitizePii — v1.0.0 NANP backward compatibility (R2 must not regres
   });
 });
 
-// -----------------------------------------------------------------------
-// Idempotency + order-of-application
-// -----------------------------------------------------------------------
-
 describe('sanitizePii — EU phone idempotency + order-of-application', () => {
   it('is idempotent on FR phone (second pass is a no-op)', () => {
     const once = sanitizePii('Tel 06 12 34 56 78 maintenant');
@@ -293,32 +238,20 @@ describe('sanitizePii — EU phone idempotency + order-of-application', () => {
   });
 
   it('does not double-redact: FR number is not re-consumed by NANP fallback', () => {
-    // A FR number like "06 12 34 56 78" is 10 digits grouped 2-2-2-2-2.
-    // The NANP fallback `(\d{3}) \d{3} \d{4}` could potentially eat any
-    // `12 34 56 78` tail if the locale-aware pass did not redact it first.
-    // The locale pass MUST run first and consume the full number. Verified
-    // by pure single `[phone]` output — no residual digits.
+    // The 3-3-4 tail of `06 12 34 56 78` would be taken by the NANP fallback if the locale pass did not consume
+    // the whole number first; a single `[phone]` with no residual digit proves the order.
     const out = sanitizePii('Mobile 06 12 34 56 78 aujourdhui');
     expect(out).toBe('Mobile [phone] aujourdhui');
-    // No leftover digit runs.
     expect(out).not.toMatch(/\d/);
   });
 
   it('does not over-redact non-phone digit runs (false-positive guard)', () => {
-    // Adversarial fixture: long digit sequences that are NOT valid phones
-    // in any locale. libphonenumber-js validation must reject them.
+    // The NANP fallback may still take the 10-digit run; the bare 8-digit SKU must not be taken by any locale pass.
     const input = 'Product SKU 12345678 and order ID 9876543210 logged.';
     const out = sanitizePii(input);
-    // NANP fallback may still match the 10-digit `9876543210` — that's
-    // v1.0.0 behaviour and not in R2 scope. The 8-digit SKU must NOT be
-    // mis-redacted as a phone by any locale-aware pass.
     expect(out).toContain('12345678');
   });
 });
-
-// -----------------------------------------------------------------------
-// Cross-locale integration — full EU CV header with phone
-// -----------------------------------------------------------------------
 
 describe('sanitizePii — cross-locale integration with EU phones', () => {
   it('redacts full FR CV header (email + address + postcode + phone)', () => {
@@ -329,7 +262,6 @@ describe('sanitizePii — cross-locale integration with EU phones', () => {
     expect(once).toContain('[address]');
     expect(once).toContain('[postcode]');
     expect(once).toContain('[phone]');
-    // Idempotent.
     expect(sanitizePii(once)).toBe(once);
   });
 

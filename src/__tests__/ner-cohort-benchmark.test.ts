@@ -1,38 +1,6 @@
-/**
- * NER cohort benchmark — fairness obligation under GDPR Art. 25.
- *
- * Per the 2026-04-30 compliance-officer verdict (PASS WITH CONDITIONS
- * C1–C7), the v1.2 cohort gate is re-scoped from the original
- * "TP ≥95% per cohort, ≤5pp variance" (deferred to ML-engine upgrade
- * milestone) to:
- *
- *   - Cohort 1 (Western European): TP ≥70% — CI BLOCKING gate.
- *   - Cohorts 2–4 (Maghrebi, East Asian transliterated, Slavic
- *     transliterated): benchmark + report measured rates in README;
- *     NO CI gate.
- *
- * The rationale: any positive TP rate against the status-quo of zero
- * name redaction is a concrete Art. 5(1)(f) risk reduction. A heuristic
- * engine that ships partial coverage is more defensible than a
- * theoretically-perfect ML engine that remains blocked by Vercel bundle
- * limits (Hybrid C / Hybrid F — both rejected per ADR 003 + ADR 004).
- *
- * The original ≥95% / ≤5pp AC is carried forward to the ML-upgrade
- * backlog issue (compliance condition C7).
- *
- * ## Fixture format
- *
- * Each fixture is a single sentence containing exactly one applicant
- * name. The expected `name` is what compromise should detect (or what
- * we report as "missed" if it doesn't). FP fixtures contain no person
- * name — every span emitted is a false positive.
- *
- * ## Reporting
- *
- * The full test suite logs per-cohort TP / FP rates to console at the
- * end of the describe blocks. README § Known Limitations is updated
- * with the same numbers (see commit 12).
- */
+// Cohort 1 (Western European) TP ≥ 70 % is the CI-blocking gate (C1); cohorts 2–4 and the false-positive set are
+// measured and logged without a gate; the ≥ 95 % / ≤ 5 pp target is carried to the ML-engine upgrade (C7). Each
+// fixture holds exactly one name; FP fixtures hold none. Measured rates are reported in README § Known Limitations.
 
 import { describe, it, expect, beforeAll } from 'vitest';
 
@@ -43,9 +11,7 @@ interface Fixture {
   expectedName: string; // canonical full name we expect detected
 }
 
-// =============================================================================
-// Cohort 1 — Western European (≥10 fixtures, TP ≥70% CI BLOCKING gate)
-// =============================================================================
+// Cohort 1 — Western European (≥ 10 fixtures, TP ≥ 70 % CI-blocking gate)
 const COHORT_1_WESTERN_EU: ReadonlyArray<Fixture> = [
   { text: 'Alice Brown applied for the role.', expectedName: 'Alice Brown' },
   { text: 'Bob Smith joined the team.', expectedName: 'Bob Smith' },
@@ -61,9 +27,7 @@ const COHORT_1_WESTERN_EU: ReadonlyArray<Fixture> = [
   { text: 'Sarah Davis approved the design.', expectedName: 'Sarah Davis' },
 ];
 
-// =============================================================================
-// Cohort 2 — Maghrebi (≥5 fixtures, benchmark only — no CI gate)
-// =============================================================================
+// Cohort 2 — Maghrebi (≥ 5 fixtures, benchmark only)
 const COHORT_2_MAGHREBI: ReadonlyArray<Fixture> = [
   { text: 'Mohamed Bensalem applied for the role.', expectedName: 'Mohamed Bensalem' },
   { text: 'Fatima Zahra leads the project.', expectedName: 'Fatima Zahra' },
@@ -73,9 +37,7 @@ const COHORT_2_MAGHREBI: ReadonlyArray<Fixture> = [
   { text: 'Nadia Boubakeur completed the course.', expectedName: 'Nadia Boubakeur' },
 ];
 
-// =============================================================================
-// Cohort 3 — East Asian transliterated (≥5 fixtures, benchmark only)
-// =============================================================================
+// Cohort 3 — East Asian transliterated (≥ 5 fixtures, benchmark only)
 const COHORT_3_EAST_ASIAN: ReadonlyArray<Fixture> = [
   { text: 'Wei Zhang reviewed the code.', expectedName: 'Wei Zhang' },
   { text: 'Yuki Tanaka shipped the feature.', expectedName: 'Yuki Tanaka' },
@@ -85,9 +47,7 @@ const COHORT_3_EAST_ASIAN: ReadonlyArray<Fixture> = [
   { text: 'Akiko Yamamoto presented the results.', expectedName: 'Akiko Yamamoto' },
 ];
 
-// =============================================================================
-// Cohort 4 — Slavic transliterated (≥5 fixtures, benchmark only)
-// =============================================================================
+// Cohort 4 — Slavic transliterated (≥ 5 fixtures, benchmark only)
 const COHORT_4_SLAVIC: ReadonlyArray<Fixture> = [
   { text: 'Dmitri Volkov is the technical lead.', expectedName: 'Dmitri Volkov' },
   { text: 'Jana Novák joined the team.', expectedName: 'Jana Novák' },
@@ -97,9 +57,7 @@ const COHORT_4_SLAVIC: ReadonlyArray<Fixture> = [
   { text: 'Natasha Sokolova manages the team.', expectedName: 'Natasha Sokolova' },
 ];
 
-// =============================================================================
-// FP fixtures — names that should NOT be detected (≥20 across categories)
-// =============================================================================
+// False-positive fixtures — no person name in any of them (≥ 20 across categories)
 const FP_FIXTURES: ReadonlyArray<string> = [
   // Company / brand names
   'I worked at Google for 5 years.',
@@ -130,10 +88,8 @@ const FP_FIXTURES: ReadonlyArray<string> = [
   'I look forward to hearing from you.',
 ];
 
-/**
- * Detection rate for a cohort: fraction of fixtures where the engine
- * emits at least one span overlapping the expected name.
- */
+// Tolerant match: any span containing one token of the expected name counts — partial detection (a truncated
+// compound, a surname collision) still reduces exposure against no redaction.
 async function detectionRate(
   engine: CompromiseNerEngine,
   fixtures: ReadonlyArray<Fixture>,
@@ -144,10 +100,6 @@ async function detectionRate(
     const spans = await engine.detectPersonSpans(f.text);
     const detected = spans.some((s) => {
       const matched = f.text.slice(s.start, s.end);
-      // Tolerant match: any span that contains the first name OR last name
-      // counts. This is intentional — partial detection (Korean compound
-      // truncation, French surname collision) still reduces exposure vs.
-      // zero redaction.
       const expectedLower = f.expectedName.toLowerCase();
       const matchedLower = matched.toLowerCase();
       const expectedTokens = expectedLower.split(/\s+/);
@@ -159,10 +111,7 @@ async function detectionRate(
   return { tp, misses, rate: tp / fixtures.length };
 }
 
-/**
- * False-positive count: number of FP fixtures where the engine emits at
- * least one span. The rate is reported in README; no CI gate.
- */
+// A fixture counts as a false positive when the engine emits any span on it.
 async function fpRate(
   engine: CompromiseNerEngine,
   fixtures: ReadonlyArray<string>,
@@ -224,7 +173,6 @@ describe('CompromiseNerEngine — cohort 2 (Maghrebi) — benchmark only', () =>
         `(${(result.rate * 100).toFixed(1)}%); misses: ${result.misses.join(', ') || 'none'}`,
     );
     /* eslint-enable no-console */
-    // No CI gate — just assert the benchmark ran.
     expect(result.tp).toBeGreaterThanOrEqual(0);
   });
 });
@@ -297,8 +245,6 @@ describe('CompromiseNerEngine — false-positive rate (≥20 FP fixtures, benchm
         `details: ${result.details.length > 0 ? result.details.join(' | ') : 'none'}`,
     );
     /* eslint-enable no-console */
-    // No CI gate at v1.2 — FP rate is reported in README. The original
-    // ≤5% FP gate is carried to ML-upgrade backlog.
     expect(result.fp).toBeGreaterThanOrEqual(0);
   });
 });

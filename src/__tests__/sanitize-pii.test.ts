@@ -1,4 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+const phoneFinder = vi.hoisted(() => ({ throwFor: null as string | null }));
+
+vi.mock('libphonenumber-js/min', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('libphonenumber-js/min')>();
+  return {
+    ...actual,
+    findPhoneNumbersInText: (text: string, opts: { defaultCountry: string }) => {
+      if (opts.defaultCountry === phoneFinder.throwFor) throw new Error('finder failure');
+      return actual.findPhoneNumbersInText(text, opts as never);
+    },
+  };
+});
 
 import { sanitizePii } from '../sanitize-pii.js';
 import {
@@ -9,24 +22,6 @@ import {
   phoneDomesticPattern,
   dobPattern,
 } from '../patterns.js';
-
-/**
- * Test suite for sanitizePii — preserves byte-equivalent behaviour
- * established at v1.0.0 (email / address / international-phone /
- * domestic-phone) and extends it with a DOB pattern covering six EU
- * locales (EN/FR/DE/IT/ES/PT).
- *
- * Order of pattern application (MUST be preserved):
- *   email → address → international phone → domestic phone → dob
- *
- * Email and phone/address order matters for idempotency (see §5.5 of the
- * compliance review). DOB is applied LAST because: (a) placing it before
- * phone would cause `\d{2}[./-]\d{2}[./-]\d{4}` DOB-like numeric sequences
- * to eat phone digit runs; (b) placing it before address is unsafe because
- * named-month DOB regexes can overlap with words in address free-text.
- * Placing DOB last preserves idempotency — no prior pattern touches the
- * `[dob]` replacement token and no [dob] token emits residual digits.
- */
 
 describe('sanitizePii — email redaction (ported from cv-chunker.ts:76)', () => {
   it('redacts basic local@domain.tld addresses', () => {
@@ -49,7 +44,6 @@ describe('sanitizePii — email redaction (ported from cv-chunker.ts:76)', () =>
   });
 
   it('does not mangle non-email @ mentions (twitter style — no TLD)', () => {
-    // Canonical regex requires `.tld{2,}` so @handle without TLD is not matched.
     expect(sanitizePii('Follow @acme on socials')).toBe('Follow @acme on socials');
   });
 
@@ -89,18 +83,14 @@ describe('sanitizePii — street address redaction (ported from cv-chunker.ts:80
   });
 
   it('redacts mixed-case street name (McLane) — CRIT-2 regression guard', () => {
-    // Pattern fix under CRIT-2: inner name class must accept BOTH upper and
-    // lower alpha so that mixed-case tokens like "McLane" match. The v1.0.0
-    // initial pattern used `[a-z]{1,15}` which rejected the capital "L".
+    // The inner name class must accept an upper-case letter after the first (`[a-zA-Z]`, not `[a-z]`).
     expect(sanitizePii('Lives at 42 McLane Drive nowadays.')).toBe(
       'Lives at [address] nowadays.',
     );
   });
 
   it('redacts all-caps street token (LA Cienega) — CRIT-2 regression guard', () => {
-    // Bounded `{0,15}` on `[a-zA-Z]` also accepts the zero-length continuation
-    // that allows a 2-char all-caps token like "LA" to match against the
-    // leading `[A-Z]` + optional tail.
+    // The `{0,15}` tail accepts a zero-length continuation, so a two-letter all-caps token matches.
     expect(sanitizePii('Dinner at 10 LA Cienega Boulevard tonight.')).toBe(
       'Dinner at [address] tonight.',
     );
@@ -129,9 +119,6 @@ describe('sanitizePii — phone redaction (ported from cv-chunker.ts:87-88)', ()
   });
 
   it('redacts French-spaced 3-3-4 grouped phone (best-effort, NANP-shaped)', () => {
-    // Canonical regex is NANP-shaped; this tests the boundary case where
-    // a French number happens to fit the shape. Per §5.3 of the compliance
-    // review, native EU formats are a known v1.1 gap (R2).
     expect(sanitizePii('Tel 033 123 4567 please.')).toBe('Tel [phone] please.');
   });
 
@@ -144,14 +131,11 @@ describe('sanitizePii — phone redaction (ported from cv-chunker.ts:87-88)', ()
 
 describe('sanitizePii — order of operations (ported §5.5 audit)', () => {
   it('redacts email before phone so @domain digit runs are not mis-matched', () => {
-    // Defence against the failure mode where a phone-like digit sequence
-    // embedded in an address like `local@domain123.co` gets eaten by phone.
     const out = sanitizePii('mail test123@example.co and call 555-123-4567');
     expect(out).toBe('mail [email] and call [phone]');
   });
 
   it('redacts address before phone so leading house number is not mis-matched', () => {
-    // Defence against phone eating a house-number digit run in an address.
     expect(
       sanitizePii('At 42 Baker Street, reach out on 555-123-4567 anytime.'),
     ).toBe('At [address], reach out on [phone] anytime.');
@@ -173,6 +157,23 @@ describe('sanitizePii — order of operations (ported §5.5 audit)', () => {
     expect(once).toContain('[phone]');
     expect(once).toContain('[address]');
     expect(twice).toBe(once);
+  });
+});
+
+describe('sanitizePii — locale phone guards', () => {
+  it('a formatted short-code shape that libphonenumber accepts is not redacted', () => {
+    expect(sanitizePii('Tel: 12 34 56 please')).toBe('Tel: 12 34 56 please');
+  });
+
+  it('a throwing phone finder for one locale is swallowed and the other passes still run', () => {
+    phoneFinder.throwFor = 'FR';
+    try {
+      expect(sanitizePii('mail jane@example.com, tel 030 12345678')).toBe(
+        'mail [email], tel [phone]',
+      );
+    } finally {
+      phoneFinder.throwFor = null;
+    }
   });
 });
 
@@ -238,14 +239,12 @@ describe('sanitizePii — DOB redaction (C1: new in v1.0.0, per compliance revie
   });
 
   it('does not redact bare years (e.g. employment dates without day)', () => {
-    // 1985 alone is a year, not a DOB. Do not over-match.
     expect(sanitizePii('Worked at Acme from 1985 to 1990.')).toBe(
       'Worked at Acme from 1985 to 1990.',
     );
   });
 
   it('does not redact month-year only (e.g. "March 1985")', () => {
-    // No day component → not a DOB per the regex design.
     expect(sanitizePii('Joined in March 1985 as a junior engineer.')).toBe(
       'Joined in March 1985 as a junior engineer.',
     );
@@ -260,10 +259,6 @@ describe('sanitizePii — DOB redaction (C1: new in v1.0.0, per compliance revie
 
 describe('sanitizePii — cross-pattern integration', () => {
   it('redacts a full EU CV header in one pass (NANP-shape phone)', () => {
-    // Uses a phone number that fits the NANP-shape regex. A native French
-    // format like "+33 6 12 34 56 78" is a known v1.0.0 gap (R2 in the
-    // compliance review) and is intentionally NOT covered here — locale-
-    // aware patterns land in v1.1 via libphonenumber-js.
     const input = [
       'Jean Dupont',
       'Né le 12 mars 1985',
@@ -281,11 +276,6 @@ describe('sanitizePii — cross-pattern integration', () => {
   });
 
   it('redacts native EU phone formats — R2 resolved in v1.1', () => {
-    // v1.0.0 flagged this input as a known gap (R2). v1.1 integrates
-    // libphonenumber-js per `piiPatterns.phoneByLocale` + sanitizePii's
-    // locale-aware pass, so `+33 6 12 34 56 78` is now redacted
-    // byte-equivalent to NANP-shape numbers. The v1.0.0 pinned behaviour
-    // (assertion of passthrough) has flipped accordingly.
     const input = 'French mobile: +33 6 12 34 56 78 today.';
     const out = sanitizePii(input);
     expect(out).toContain('[phone]');
@@ -303,19 +293,6 @@ describe('sanitizePii — cross-pattern integration', () => {
 });
 
 describe('piiPatterns — factory-function API (IMP-1: fresh instances, no shared lastIndex)', () => {
-  /**
-   * v1.0.0 exports patterns as factory functions, not singleton RegExps.
-   * Rationale: module-level `/g`-flagged RegExps carry a stateful `lastIndex`
-   * which makes consecutive `.test()` / `.exec()` calls on the same instance
-   * alternate between match and no-match — a classic footgun. Factories
-   * return a fresh instance on every call so programmatic consumers cannot
-   * trip the stateful-lastIndex hazard.
-   *
-   * `sanitizePii` itself is safe either way (String.prototype.replace resets
-   * `lastIndex` internally) but external callers using `.test()` / `.exec()`
-   * need the fresh instance guarantee.
-   */
-
   it('each export is a function (not a module-level RegExp)', () => {
     expect(typeof emailPattern).toBe('function');
     expect(typeof addressPattern).toBe('function');
@@ -345,9 +322,7 @@ describe('piiPatterns — factory-function API (IMP-1: fresh instances, no share
   });
 
   it('two successive .test() calls on separately-built regexes do NOT alternate', () => {
-    // With a single shared /g-flagged regex, .test() alternates true/false
-    // because lastIndex advances on match and resets on miss. Fresh instances
-    // must not show that behaviour.
+    // A single shared `/g` regex alternates true/false as `lastIndex` advances and resets.
     const input = 'Mail jane@example.com now.';
     const first = piiPatterns.email().test(input);
     const second = piiPatterns.email().test(input);
@@ -356,17 +331,10 @@ describe('piiPatterns — factory-function API (IMP-1: fresh instances, no share
   });
 
   it('factory-returned RegExp does not leak a module-level shared source identity', () => {
-    // If the factory were just `() => SHARED_REGEX`, JSON-equivalence would
-    // still hold across calls, but the instance identity would match. We
-    // assert distinct instances (previous test) — this test ensures the
-    // factory pattern is genuinely building fresh regexes, not returning a
-    // singleton wrapped in a closure.
+    // If the factory returned one shared instance, `b.lastIndex` would have advanced with `a`.
     const a = piiPatterns.email();
     const b = piiPatterns.email();
-    // Advance lastIndex on `a` by testing it.
     a.test('foo@bar.com');
-    // `b` must remain at lastIndex 0 — would not be the case if a/b shared
-    // the underlying RegExp object.
     expect(b.lastIndex).toBe(0);
   });
 });

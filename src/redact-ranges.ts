@@ -1,9 +1,6 @@
-// COMPLIANCE: matched substrings MUST NOT be logged. Match counts permitted.
-// Redaction is destructive / one-way: the byte ranges passed in are used
-// solely to splice the replacement token into the output string. Range
-// bounds and the text they cover are never written to logs, telemetry, or
-// any other side-channel. (GDPR Art. 5(1)(c) data-minimisation, Art. 25
-// transparency contract.)
+// COMPLIANCE: destructive one-way redaction — the ranges passed in are used solely to splice the token into the
+// output; range bounds and the text they cover are never logged, returned or stored.
+// Record: docs/compliance/redaction-record.md § 1.
 
 export interface ByteRange {
   start: number;

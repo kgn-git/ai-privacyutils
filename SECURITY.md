@@ -43,6 +43,7 @@ Vulnerabilities are disclosed via GitHub Security Advisory once a fix is shipped
 ## Further reading
 
 - [`README.md`](README.md) § Security Posture (S11) — full supply-chain posture, deferred-tier rationale, and forward-looking activation paths for S1/S2/S3.
+- [`docs/compliance/redaction-record.md`](docs/compliance/redaction-record.md) — the redaction contract, per-pattern rationale, review-finding index and known limitations.
 - [`docs/INTEGRITY.md`](docs/INTEGRITY.md) — consumer-side integrity guidance under git-install architecture.
 - [`docs/Handover-35.md`](docs/Handover-35.md) § Security Posture Decision — original deferred-tier decision rationale.
 - Issue [#49](https://github.com/kgn-git/ai-privacyutils/issues/49) — S1/S2/S3 re-evaluation 30 days post-public-flip.

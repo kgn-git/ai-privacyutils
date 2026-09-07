@@ -1,18 +1,4 @@
-/**
- * CompromiseNerEngine — span-boundary, deny-list, GDPR-safe extraction tests.
- *
- * Pinpoint-tests the binding implementation constraints from the
- * 2026-04-30 expert review:
- *   - Constraint 2: trailing-punctuation strip (period eaten if not stripped)
- *   - Constraint 3: GDPR-safe extraction (no PII / Art.9 fields referenced)
- *   - Constraint 4: score hardcoded to 1.0
- *   - Constraint 5: deny-list via Set.has() equality only
- *   - Constraint 7: PiiNerLoadError API-shape guard
- *
- * NOTE: this file actually loads `compromise` (~316ms first-time on cold
- * Node). We share a single engine across the whole describe block and
- * pre-warm it once via beforeAll.
- */
+// This file loads `compromise`; each describe block shares one engine pre-warmed in beforeAll.
 
 import { describe, it, expect, beforeAll } from 'vitest';
 
@@ -88,7 +74,6 @@ describe('CompromiseNerEngine — span boundaries', () => {
     for (const s of spans) {
       const keys = Object.keys(s).sort();
       expect(keys).toEqual(['end', 'label', 'score', 'start']);
-      // PII fields from compromise must NEVER appear on the public span:
       expect((s as unknown as { text?: unknown }).text).toBeUndefined();
       expect((s as unknown as { terms?: unknown }).terms).toBeUndefined();
       expect((s as unknown as { person?: unknown }).person).toBeUndefined();
@@ -133,12 +118,16 @@ describe('CompromiseNerEngine — deny-list (constraint 5)', () => {
   it('custom deny-list constructor option overrides DEFAULT_NER_DENY_LIST', async () => {
     const custom = new CompromiseNerEngine({ denyList: ['Brown'] });
     await custom.ready;
-    // "Brown" alone (single token) — custom deny-list should suppress this
-    // when compromise flags it as a person. The behaviour we assert is that
-    // a custom denyList REPLACES (not extends) the default, so default
-    // entries (Rue, Jenkins) are no longer denied — but Brown is.
-    // Sanity: at minimum the constructor accepted the option without throw.
+    // A custom `denyList` replaces the default; this asserts only that the option is accepted.
     expect(custom.engineId).toBe('compromise');
+  });
+
+  it('a deny-list entry is compared by equality, never compiled as a regex', async () => {
+    const custom = new CompromiseNerEngine({ denyList: ['.*'] });
+    await custom.ready;
+    const text = 'Alice Brown applied.';
+    const spans = await custom.detectPersonSpans(text);
+    expect(spans.map((s) => text.slice(s.start, s.end))).toContain('Alice Brown');
   });
 });
 
@@ -181,11 +170,6 @@ describe('CompromiseNerEngine — cohort smoke tests', () => {
   });
 
   it('French street-type "Rue" appears in deny-list (suppression behaviour)', async () => {
-    // We assert the deny-list contains 'Rue'; whether compromise itself
-    // flags `Rue` as a name on a given input is engine-dependent. The
-    // contract is: if compromise produces a span for a deny-listed term,
-    // CompromiseNerEngine drops it. Empirical FP fixtures live in the
-    // cohort test file (commit 7).
     expect(DEFAULT_NER_DENY_LIST).toContain('Rue');
   });
 });

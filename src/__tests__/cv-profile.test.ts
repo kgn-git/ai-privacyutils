@@ -1,26 +1,5 @@
-/**
- * CV redaction profile (v1.3 — issue #64).
- *
- * The `'cv'` profile preserves employment dates (its one behavioural change:
- * a cue-gated DOB pass) and, passively, employer/organisation names and
- * city/region (compromise mostly does not person-tag them), while STILL
- * masking true PII (person name, email, phone, street address, postcode,
- * national ID, and an explicitly-labelled date of birth).
- *
- * Test groups:
- *   1. CV-preserve (sync): full employment dates + regex-safe employers +
- *      cities pass through intact under `{ profile: 'cv' }`.
- *   2. CV-preserve (async + NER): applicant name masked; employer + city
- *      passed through (not person-tagged); employment dates preserved.
- *   3. PII-guard (async + NER): true PII STILL masked under `'cv'` — the fix
- *      must not weaken redaction recall.
- *   4. Labelled DOB still masked under `'cv'` (sync + async).
- *   5. Default-profile unchanged — pins v1.2 byte-identical behaviour.
- *   6. Person-NER pass unchanged — accepted residual (person-tagged employer
- *      still redacted) + recall safety (cv person-redaction === default).
- *
- * See `src/profiles.ts` for the profile contract.
- */
+// The `'cv'` profile's one behavioural change is the cue-gated date pass; employer and city tokens survive only
+// because `compromise` mostly does not person-tag them. True PII must still be masked under it.
 
 import { describe, it, expect } from 'vitest';
 
@@ -28,11 +7,7 @@ import { sanitizePii } from '../sanitize-pii.js';
 import { sanitizePiiAsync } from '../sanitize-pii-async.js';
 import type { NerEngine, NerSpan } from '../ner/ner-engine.js';
 
-/**
- * Deterministic engine emitting caller-supplied PERSON spans without loading
- * compromise. The `'cv'` profile does NOT change the person-NER pass, so the
- * mock only needs to supply person spans.
- */
+// Deterministic engine emitting caller-supplied PERSON spans without loading compromise.
 class MockNerEngine implements NerEngine {
   public readonly engineId = 'mock';
   public readonly ready = Promise.resolve();
@@ -42,10 +17,8 @@ class MockNerEngine implements NerEngine {
   }
 }
 
-// A CV whose employers are org-tagged / untagged (compromise does NOT
-// person-tag Siemens / Deloitte) and whose cities are place-tagged. The
-// employment dates are FULL DD/MM/YYYY dates — these DO match the default
-// dobPattern and are destroyed to [dob] under the default profile.
+// Employers that compromise does not person-tag (Siemens, Deloitte), place-tagged cities, and full DD/MM/YYYY
+// employment dates — which the default profile destroys to [dob].
 const CV_TEXT = [
   'Jane Doe',
   'Senior Software Engineer at Siemens, Munich, from 01/06/2018 to 31/08/2021.',
@@ -84,18 +57,14 @@ describe('cv profile — CV-preserve (async + NER)', () => {
       profile: 'cv',
       enableNer: true,
     });
-    // Applicant name masked
     expect(out).toContain('[person]');
     expect(out).not.toContain('Jane Doe');
-    // Employers + cities preserved
     expect(out).toContain('Siemens');
     expect(out).toContain('Deloitte');
     expect(out).toContain('Munich');
     expect(out).toContain('Manchester');
-    // Employment dates preserved
     expect(out).toContain('01/06/2018');
     expect(out).toContain('20/05/2018');
-    // Email still masked
     expect(out).toContain('[email]');
   });
 });
@@ -187,6 +156,17 @@ describe('cv profile — explicitly-labelled DOB still masked', () => {
   });
 });
 
+describe('cv profile — cue boundary', () => {
+  it('a birth cue does not fire inside a longer word and does not reach a later date', () => {
+    expect(sanitizePii('reborn 12/03/1985 as a coder', { profile: 'cv' })).toBe(
+      'reborn 12/03/1985 as a coder',
+    );
+    expect(
+      sanitizePii('born in Lyon, employed from 01/06/2018', { profile: 'cv' }),
+    ).toBe('born in Lyon, employed from 01/06/2018');
+  });
+});
+
 describe('cv profile — default profile unchanged (byte-identical pin)', () => {
   it('default profile still redacts a bare full date to [dob]', () => {
     expect(sanitizePii('Interview on 23/05/1985 confirmed.')).toBe(
@@ -211,21 +191,10 @@ describe('cv profile — default profile unchanged (byte-identical pin)', () => 
 });
 
 describe('cv profile — person-NER pass is unchanged (accepted residual + recall safety)', () => {
-  // The `'cv'` profile deliberately does NOT alter person-NER. An earlier draft
-  // suppressed PERSON spans that compromise also tagged ORG/PLACE; that was
-  // removed (SD-002, PR #66) because it leaked the names of real people whose
-  // given name is also a place/org token (Paris, Austin, Morgan, …) into the
-  // embedding. These tests pin the resulting contract:
-  //   (a) accepted residual — a person-tagged employer IS still redacted (the
-  //       robust fix for that precision gap is the field-aware API follow-up,
-  //       jobflow-platform#1424);
-  //   (b) recall safety — a person span is redacted under 'cv' exactly as under
-  //       'default', regardless of any org/place shape.
+  // The `'cv'` profile does not alter person-NER: a person-tagged employer is still redacted (accepted residual,
+  // the field-aware API is the follow-up) and a person span is redacted exactly as under `'default'`.
 
   it('accepted residual: a person-tagged employer is STILL redacted under cv', async () => {
-    // "Morgan Stanley" is the ~2/30 employer class compromise person-tags. The
-    // cv profile does not rescue it — redaction (recall) is preserved. Robust
-    // preservation requires the field-aware API (jobflow-platform#1424).
     const text = 'Worked at Morgan Stanley in 2019.';
     const start = text.indexOf('Morgan Stanley');
     const end = start + 'Morgan Stanley'.length;

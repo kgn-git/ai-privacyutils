@@ -2,19 +2,8 @@ import { describe, it, expect } from 'vitest';
 
 import { piiMiddleware } from '../pii-middleware.js';
 
-/**
- * Middleware is request-side only: it transforms the params BEFORE the SDK
- * serialises them to the provider HTTP call. The response path is
- * untouched — response scrubbing is a separate concern handled by
- * consumer-side post-LLM sanitisation (see scoring's
- * `llm-coverage.service.ts:178` for the canonical pattern).
- *
- * Per Vercel AI SDK v4, middleware conforms to `LanguageModelV1Middleware`
- * (see https://github.com/vercel/ai/blob/ai@4.3.19/content/docs/07-reference/01-ai-sdk-core/65-language-model-v1-middleware.mdx).
- * The provider-level `params.prompt` is a low-level array of messages whose
- * content parts are either strings or objects with a `type: 'text'` /
- * `text: string` shape (or image/file parts which we do not touch).
- */
+// Request-side only: the middleware transforms params before the SDK serialises them; response scrubbing is a
+// consumer concern. A provider-level `prompt` is an array of messages whose parts are strings or `{ type, text }`.
 
 function textPart(text: string): { type: 'text'; text: string } {
   return { type: 'text', text };
@@ -117,6 +106,29 @@ describe('piiMiddleware.transformParams — messages[*].content', () => {
     });
   });
 
+  it('redacts a reasoning part', async () => {
+    const params = {
+      prompt: [
+        {
+          role: 'assistant',
+          content: [{ type: 'reasoning', text: 'User mail is jane@example.com.' }],
+        },
+      ],
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    const prompt = out.prompt as Array<{
+      role: string;
+      content: Array<{ type: string; text: string }>;
+    }>;
+    expect(prompt[0]!.content[0]!).toEqual({
+      type: 'reasoning',
+      text: 'User mail is [email].',
+    });
+  });
+
   it('handles multiple messages (system + user + assistant)', async () => {
     const params = {
       prompt: [
@@ -150,13 +162,6 @@ describe('piiMiddleware.transformParams — type: stream', () => {
 });
 
 describe('piiMiddleware.transformParams — locale-aware end-to-end (R1 / #1)', () => {
-  // Integration coverage: verifies that the locale-aware sanitisation
-  // added in v1.1 (patterns.ts) flows through the middleware boundary.
-  // RED-then-GREEN was already satisfied at the service-layer for the
-  // locale patterns (commits a8528b3 → f552d02); these cases are
-  // integration tests over already-green implementation and are
-  // additive rather than gating per SI-001.
-
   it('redacts a full French CV header through the middleware', async () => {
     const params = {
       prompt:
@@ -295,48 +300,12 @@ describe('piiMiddleware.transformParams — non-mutation of input', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// Benchmark — `piiMiddleware.transformParams` end-to-end overhead
-//
-// (privacyutils#23 IMP-1 Option b — SD-002 review of PR #22.)
-//
-// The `sanitizePii` regex-only benchmark at
-// `src/__tests__/locale-patterns.test.ts` measures a plain 10KB string
-// going through the redaction pipeline in isolation. The middleware path
-// additionally pays:
-//
-//   - `JSON.parse(JSON.stringify(params))` deep-clone of the ENTIRE
-//     provider-layer `LanguageModelV1CallOptions` (prompt array + nested
-//     content parts + sibling fields like `temperature` / `maxTokens`)
-//     — see `pii-middleware.ts:38-40` and the `deepClone(params)` call
-//     at line 187.
-//   - Array traversal over the multi-message `prompt` array (system +
-//     user + assistant turns typical of a provider-layer call).
-//   - Per-part traversal of `content` array for text / reasoning parts.
-//   - Per-call option-object allocation (`PartOptions` bundle).
-//
-// A compliance-grade library cannot assert "middleware overhead < budget"
-// on the strength of a regex-only benchmark — the middleware-level
-// overhead is where the JSON-clone cost lives. This benchmark constructs
-// a realistic provider-layer shape rather than a synthetic 10KB string.
-//
-// Shape: system message + user message with array content (3 text parts
-// + 1 image part for realism) + assistant history message, total body
-// approx 10KB of mixed FR/DE/IT/ES/PT/UK EU PII. We use 10-run warm-up
-// (prime JIT) + 10 measured runs, assert the MEAN.
-//
-// Budget: 20ms. Measured empirically at implementation time well under
-// this ceiling — see handover for the documented mean. Loose ceiling
-// keeps the test non-flaky on slow CI runners but tight enough that a
-// real regression (e.g. someone replaces JSON-clone with a recursive
-// structural clone that traverses every byte) would fail the gate.
-// -----------------------------------------------------------------------
-
+// Middleware-level cost on a realistic provider-layer shape (system + user with three text parts and an image +
+// assistant history, ~10 KB of mixed EU PII): the JSON deep clone and message traversal that the regex-only
+// benchmark in locale-patterns.test.ts does not pay. 20 ms leaves headroom on a slow runner and still catches a
+// byte-by-byte structural clone.
 describe('piiMiddleware.transformParams end-to-end — performance budget', () => {
   it('processes a realistic ~10KB LanguageModelV1CallOptions in under 20ms (mean of 10 runs)', async () => {
-    // One message-body block of ~315 chars of mixed EU PII across locales.
-    // Repeated at appropriate counts to bring each content part + string
-    // content to roughly the 10KB budget across the whole params object.
     const euBlock =
       'Jean Dupont, 12 rue de la Paix, 75001 Paris, jean@example.fr. ' +
       'Hans Müller, Hauptstraße 23, 80331 München, hans@example.de. ' +
@@ -344,14 +313,8 @@ describe('piiMiddleware.transformParams end-to-end — performance budget', () =
       'John Smith, 10 Downing Street, SW1A 2AA, john@example.co.uk. ' +
       'Ana Silva, Rua das Flores 45, 1200-195 Lisboa, ana@example.pt. ' +
       'Nato il 12 marzo 1985. ';
-    // Three parts each of ~3.5KB (11 repeats × ~315 chars) + system/user
-    // string content = ~10.5KB total redactable text in the params object.
     const partText = euBlock.repeat(11);
 
-    // Realistic provider-layer shape: multi-message prompt (system + user
-    // with array content including an image part + assistant history),
-    // plus sibling provider fields. Matches the shape the Vercel AI SDK
-    // v4 passes to `transformParams` on a real generate / stream call.
     const buildParams = (): Record<string, unknown> => ({
       prompt: [
         {
@@ -363,8 +326,7 @@ describe('piiMiddleware.transformParams end-to-end — performance budget', () =
           content: [
             { type: 'text', text: partText },
             { type: 'text', text: partText },
-            // Non-text part — exercises the `leaves non-text parts
-            // untouched` code path inside `redactPart`.
+            // The image part exercises the pass-through branch of `redactPart`.
             { type: 'image', image: 'https://example.com/cv.png' },
             { type: 'text', text: partText },
           ],
@@ -379,20 +341,16 @@ describe('piiMiddleware.transformParams end-to-end — performance budget', () =
       topP: 0.9,
     });
 
-    // Sanity-check the shape: total redactable text roughly matches the
-    // sanitizePii-regex benchmark's ~10KB budget so the two are
-    // comparable.
+    // The redactable text matches the regex-only benchmark's ~10 KB so the two numbers are comparable.
     const totalRedactableBytes = partText.length * 3;
     expect(totalRedactableBytes).toBeGreaterThan(9_000);
     expect(totalRedactableBytes).toBeLessThan(12_000);
 
-    // Warm-up pass (prime JIT + libphonenumber-js metadata load).
+    // Warm-ups prime the JIT and the lazy libphonenumber metadata load.
     await piiMiddleware.transformParams!({
       type: 'generate',
       params: buildParams() as never,
     });
-    // Additional warm-ups — transformParams has non-trivial first-call
-    // cost from libphonenumber metadata lazy-load.
     for (let i = 0; i < 3; i += 1) {
       await piiMiddleware.transformParams!({
         type: 'generate',
@@ -400,7 +358,6 @@ describe('piiMiddleware.transformParams end-to-end — performance budget', () =
       });
     }
 
-    // 10 measured runs.
     const runs: number[] = [];
     for (let i = 0; i < 10; i += 1) {
       const params = buildParams();
@@ -413,9 +370,6 @@ describe('piiMiddleware.transformParams end-to-end — performance budget', () =
     }
     const mean = runs.reduce((a, b) => a + b, 0) / runs.length;
 
-    // AC: mean overhead < 20ms on realistic 10KB params. Measured value
-    // is documented in `docs/Handover-23.md` so future regressions are
-    // visible even when the assertion stays green.
     expect(mean).toBeLessThan(20);
   });
 });

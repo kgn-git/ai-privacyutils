@@ -1,68 +1,10 @@
-// COMPLIANCE: matched substrings MUST NOT be logged. Match counts permitted.
-// The async path runs NER on the ORIGINAL text (compromise offsets are
-// invalid on regex-redacted output), then merges NER spans with the
-// regex-redacted output via byte-range matching. Matched name strings are
-// bound to local variables in the merge body and are never returned,
-// logged, or assigned to a wider scope.
-// (GDPR Art. 5(1)(c) data-minimisation, Art. 25 transparency contract.)
-/**
- * sanitizePiiAsync — async PII redaction (regex + NER name redaction).
- *
- * v1.2 — issue #42. Adds PERSON-entity name redaction to the v1.1 regex
- * pipeline via a pluggable `NerEngine`. The sync `sanitizePii` is unchanged
- * — existing consumers see no behavioural change.
- *
- * ## Why a separate async export
- *
- * NER inference is fundamentally async (engine.ready resolves a Promise;
- * `compromise` itself loads via `await import(...)`). Making `sanitizePii`
- * async would be a type-level breaking change for every existing caller —
- * including those who never enable NER. The async surface is additive: new
- * consumers opt into NER via `sanitizePiiAsync`; existing consumers keep
- * the sync regex-only `sanitizePii`. ADR 003 / 004 — backward-compat
- * preserved.
- *
- * ## Span-merge algorithm (constraint #9 from 2026-04-30 expert review)
- *
- * NER spans MUST be computed on the ORIGINAL text — `compromise`'s
- * character offsets are invalid against post-regex-redacted output (regex
- * passes can shrink or grow the text in ways that desynchronise offsets).
- *
- * After both passes:
- *   1. Run sync `sanitizePii` on ORIGINAL → `regexRedacted`.
- *   2. Run `nerEngine.detectPersonSpans(ORIGINAL)` → `nerSpans`.
- *   3. For each NER span (in reverse-start order, after de-duplication
- *      and overlap-merge — same pattern as `redactLocalePhones` at
- *      `sanitize-pii.ts:130–177`):
- *        - Extract `name = ORIGINAL.slice(span.start, span.end)`.
- *        - Search for `name` in `regexRedacted`.
- *        - If found → replace ONE occurrence with `[person]` /
- *          `<<REDACTED_PERSON>>` token.
- *        - If NOT found → the regex pass already consumed a span that
- *          covered or contained this NER span (the "larger span wins on
- *          overlap" contract — e.g. FR-address regex consumed
- *          `12 rue de la Paix` so the nested NER FP on `rue` cannot be
- *          found in `[address]`).
- *
- * The `name`-find approach is robust under the realistic CV input shape
- * because:
- *   - NER spans are 5–30 char proper nouns; the probability that the
- *     regex-redacted output contains the exact same string at a different
- *     position than the original is vanishingly low (it would require an
- *     unrelated coincidental occurrence of the same name string elsewhere
- *     in the document).
- *   - When the same name occurs twice in the original (a referee name
- *     repeated in a recommendation paragraph), the NER engine emits a
- *     span for each occurrence — we replace each in order.
- *
- * ## Idempotency
- *
- * `[person]` (readable) and `<<REDACTED_PERSON>>` (sentinel) are
- * pattern-disjoint from every v1.x redaction pattern AND from every NER
- * heuristic — see `token-format.ts` § Idempotency invariant. Running
- * `sanitizePiiAsync` a second time is a strict no-op on already-redacted
- * tokens.
- */
+// COMPLIANCE: NER runs on the original text and the matched name is bound to a loop-local variable in the merge —
+// never returned, logged or assigned wider; matched substrings must not be logged, match counts may be.
+// Record: docs/compliance/redaction-record.md § 1, § 3.8.
+
+// A separate async export: engine loading is asynchronous and making `sanitizePii` async would break every
+// caller's types. With `enableNer: false` (the default) the regex output is returned verbatim and no engine is
+// constructed.
 
 import { sanitizePii, type SanitizePiiOptions } from './sanitize-pii.js';
 import { mergeRanges } from './redact-ranges.js';
@@ -77,61 +19,21 @@ import {
   type NerSpan,
 } from './ner/index.js';
 
-/**
- * Optional configuration for `sanitizePiiAsync`. Extends `SanitizePiiOptions`
- * with the NER-related fields. All fields are optional; the no-options
- * default behaves byte-identically to `sanitizePii(text)` (regex-only,
- * names not redacted).
- */
+/** `SanitizePiiOptions` plus the NER fields; with none of them set the output equals `sanitizePii(text, options)`. */
 export interface SanitizePiiAsyncOptions extends SanitizePiiOptions {
-  /**
-   * Master switch for NER name redaction.
-   *
-   * **Setting `enableNer: false` (default) means names are NOT redacted.
-   * Enable for GDPR Art. 25 compliance when sending text to third-party
-   * LLM processors.**
-   *
-   * Default: `false`. v1.2 ships with NER opt-in to give consumers a
-   * staged-rollout path; platform integration is tracked as a near-term
-   * deliverable (compliance-officer condition C6).
-   */
+  /** Names are redacted only when `true`; the default keeps existing consumers' output unchanged (C6). */
   enableNer?: boolean;
-  /**
-   * Concrete NER engine override. If omitted, `createNerEngine({ enableNer })`
-   * is used — which returns `NullNerEngine` when `enableNer:false` and
-   * `CompromiseNerEngine` when `enableNer:true`.
-   *
-   * Override is used in tests (deterministic mock engines without loading
-   * compromise) and by advanced consumers who want to wire a custom engine
-   * (HTTP / wink / cloud).
-   */
+  /** Engine override; otherwise `createNerEngine({ enableNer })` — `CompromiseNerEngine` when enabled. */
   nerEngine?: NerEngine;
-  /**
-   * Confidence threshold passed through to the NER engine (no-op for
-   * `CompromiseNerEngine` — see `NerDetectOptions.confidenceThreshold`
-   * JSDoc).
-   */
+  /** Passed through to the engine; a no-op for `CompromiseNerEngine`. */
   nerConfidenceThreshold?: number;
-  /**
-   * Per-call allow-list of names that are NOT to be redacted even if the
-   * NER engine flags them.
-   */
+  /** Per-call names never redacted even when the engine flags them. */
   nerAllowList?: ReadonlyArray<string>;
 }
 
-/**
- * Apply NER redactions onto an already-regex-redacted string.
- *
- * Algorithm: for each merged NER span (in reverse-start order — same
- * direction as `redactLocalePhones`), extract the corresponding substring
- * from the ORIGINAL text and search for it in `regexRedacted`. If found,
- * replace the first occurrence with `token`. If not found, the regex pass
- * consumed a span that overlapped this NER span ("larger span wins").
- *
- * The matched name string is bound to a local-only variable (`nameLocal`)
- * inside the loop body and is never returned, logged, or assigned to a
- * wider scope (COMPLIANCE: file header).
- */
+// NER spans come from the original text because `compromise` offsets are invalid against regex-redacted output.
+// Each merged span's text is sliced from the original and its first remaining occurrence in the mutating output is
+// replaced; a span whose text is gone was consumed by a larger regex span. Loop direction guarantees nothing (record § 5).
 export function applyNerRedactions(
   original: string,
   nerSpans: ReadonlyArray<NerSpan>,
@@ -141,14 +43,6 @@ export function applyNerRedactions(
   if (nerSpans.length === 0) return regexRedacted;
   const merged = mergeRanges(nerSpans);
   let out = regexRedacted;
-  // Process in reverse start order for symmetry with redactLocalePhones at
-  // sanitize-pii.ts:130-160. Note: this implementation uses indexOf on the
-  // mutating `out` string rather than index-based slicing, so loop direction
-  // does NOT provide an "earlier matches unaffected" guarantee — each
-  // iteration independently locates the first remaining occurrence of the
-  // span text in the already-mutated output. Correctness comes from indexOf
-  // always finding a remaining match if any spans of that text remain
-  // unredacted, NOT from the loop ordering.
   for (let i = merged.length - 1; i >= 0; i -= 1) {
     const range = merged[i]!;
     if (range.start < 0 || range.end > original.length) continue;
@@ -159,67 +53,34 @@ export function applyNerRedactions(
     if (idx >= 0) {
       out = out.slice(0, idx) + token + out.slice(idx + nameLocal.length);
     }
-    // If not found, the regex pass already consumed an enclosing range —
-    // suppress the NER span (no-op).
   }
   return out;
 }
 
-/**
- * Sanitise PII from arbitrary text — async path with optional NER name
- * redaction (v1.2 — issue #42).
- *
- * - When `enableNer: false` (default): byte-equivalent to `sanitizePii(text,
- *   options)`. Names are NOT redacted.
- * - When `enableNer: true`: regex pipeline + NER engine run on the ORIGINAL
- *   text. NER spans are merged with the regex-redacted output via
- *   `applyNerRedactions` (larger span wins on overlap with regex spans).
- *
- * Throws `PiiInputTooLargeError` if `text.length > maxInputLength` (same
- * O(1) cap as `sanitizePii`).
- */
+/** Same cap and regex pipeline as `sanitizePii`; the `'cv'` profile leaves the NER pass unchanged (R11-residual, record § 5). */
 export async function sanitizePiiAsync(
   text: string,
   options?: SanitizePiiAsyncOptions,
 ): Promise<string> {
   if (text === '' || text == null) return text ?? '';
 
-  // O(1) cap (same gate as sync sanitizePii).
   const maxInputLength = options?.maxInputLength ?? DEFAULT_MAX_INPUT_LENGTH;
   if (text.length > maxInputLength) {
     throw new PiiInputTooLargeError(text.length, maxInputLength);
   }
 
-  // Run regex pipeline on the ORIGINAL text — this preserves the
-  // byte-equivalent v1.0/v1.1 contract for `sanitizePii(text, options)`.
   const regexRedacted = sanitizePii(text, {
     tokenFormat: options?.tokenFormat,
     maxInputLength: options?.maxInputLength,
     profile: options?.profile,
   });
 
-  // Fast path: enableNer:false (default) — return regex output verbatim.
-  // No NER engine is constructed; no compromise import is triggered;
-  // sync-equivalent behaviour with one extra await tick.
   if (options?.enableNer !== true) {
     return regexRedacted;
   }
 
-  // NER path. Pick the explicit engine override if supplied; otherwise
-  // construct via the factory (CompromiseNerEngine).
   const engine = options.nerEngine ?? createNerEngine({ enableNer: true });
 
-  // Run NER on the ORIGINAL text — compromise offsets are invalid on
-  // regex-redacted output (constraint 9).
-  //
-  // NOTE (v1.3 — issue #64): the `'cv'` profile does NOT alter the person-NER
-  // pass. An earlier draft suppressed PERSON spans that compromise also tagged
-  // ORG/PLACE, but that INTRODUCED a name-recall leak — a real person whose
-  // given name is also a place/org token (Paris, Austin, Georgia, Morgan, …)
-  // would have their `[person]` span suppressed and their name preserved into
-  // the embedding. For a privacy library that trade is net-negative, so the
-  // suppression was removed (SD-002 review, PR #66). The `'cv'` profile's only
-  // effect is the cue-gated date pass in the sync regex stage above.
   const nerSpans = await engine.detectPersonSpans(text, {
     confidenceThreshold: options.nerConfidenceThreshold,
     allowList: options.nerAllowList,

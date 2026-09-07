@@ -10,30 +10,6 @@ import {
   DEFAULT_MAX_INPUT_LENGTH,
 } from '../limits.js';
 
-/**
- * Test suite for the runtime input-length cap (v1.1 — issue #10 / security
- * review R7 / compliance must-land-before-v1.1).
- *
- * Design contract (per ADR 002, docs/adr/002-input-length-cap.md):
- *
- *   sanitizePii(text, { maxInputLength?: number })
- *     - Default cap: 500_000 code units (`DEFAULT_MAX_INPUT_LENGTH`).
- *     - Under-cap and at-cap inputs are processed normally.
- *     - Over-cap inputs throw `PiiInputTooLargeError` with numeric
- *       `.inputLength` and `.maxInputLength` fields.
- *     - Length is measured in JS string code units (O(1) `String#length`).
- *     - The check runs BEFORE any regex pass (belt-and-braces ReDoS defence).
- *
- *   createPiiMiddleware({ maxInputLength?: number })
- *     - Threads `maxInputLength` through to every `sanitizePii` call made
- *       on each redactable substring (string prompts, string message
- *       content, text parts, reasoning parts).
- *     - Errors propagate cleanly out of `transformParams`.
- *
- * These tests are authored in a RED commit before the GREEN implementation
- * commit (SI-001 — TDD RED → GREEN discipline).
- */
-
 function textPart(text: string): { type: 'text'; text: string } {
   return { type: 'text', text };
 }
@@ -94,11 +70,7 @@ describe('sanitizePii — maxInputLength default (500_000)', () => {
   });
 
   it('processes input at exactly DEFAULT_MAX_INPUT_LENGTH', () => {
-    // Build a string of exactly the cap length. Filler is ` ` (space) —
-    // disjoint from every redaction pattern (email/address/postcode/phone/
-    // DOB all require at least one digit-or-letter in the match, with
-    // anchors that reject a bare run of spaces) so the exact cap-length
-    // input passes through unchanged.
+    // Spaces match no pattern, so a cap-length input passes through unchanged.
     const input = ' '.repeat(DEFAULT_MAX_INPUT_LENGTH);
     expect(input.length).toBe(DEFAULT_MAX_INPUT_LENGTH);
     const result = sanitizePii(input);
@@ -129,7 +101,6 @@ describe('sanitizePii — maxInputLength default (500_000)', () => {
 describe('sanitizePii — maxInputLength override', () => {
   it('accepts a custom smaller cap', () => {
     const input = 'a'.repeat(100);
-    // Under 200 cap → passes.
     expect(sanitizePii(input, { maxInputLength: 200 })).toBe(input);
   });
 
@@ -158,7 +129,6 @@ describe('sanitizePii — maxInputLength override', () => {
   });
 
   it('accepts a higher-than-default custom cap', () => {
-    // An input larger than default but under a higher override must pass.
     const input = 'x'.repeat(DEFAULT_MAX_INPUT_LENGTH + 50);
     expect(
       sanitizePii(input, { maxInputLength: DEFAULT_MAX_INPUT_LENGTH + 100 }),
@@ -168,9 +138,7 @@ describe('sanitizePii — maxInputLength override', () => {
 
 describe('sanitizePii — length check runs BEFORE regex (O(1) gate)', () => {
   it('throws before touching a string that would redact as an email', () => {
-    // The cap check must gate regex, not the other way round. Even a string
-    // whose content would match emailPattern() must throw cleanly if it
-    // exceeds the configured cap.
+    // A string that would match emailPattern() must still throw cleanly when it exceeds the cap.
     const over = 50_000;
     const tail = '@example.com';
     const input = 'a'.repeat(over - tail.length) + tail;
@@ -181,16 +149,12 @@ describe('sanitizePii — length check runs BEFORE regex (O(1) gate)', () => {
   });
 
   it('empty string short-circuits BEFORE length check (no option needed)', () => {
-    // Preserves the existing v1.0.0 guard: empty string returns empty
-    // without invoking the cap logic.
     expect(sanitizePii('', { maxInputLength: 0 })).toBe('');
   });
 });
 
 describe('sanitizePii — backward compatibility', () => {
   it('preserves byte-equivalent output on canonical fixture with no options', () => {
-    // Sample shared with other tests to guard against any accidental
-    // drift in the default code path.
     const input = 'Contact jane.doe@example.com or call 555-123-4567';
     expect(sanitizePii(input)).toBe('Contact [email] or call [phone]');
   });
@@ -268,9 +232,7 @@ describe('createPiiMiddleware — maxInputLength threading', () => {
   });
 
   it('applies the cap PER PART, not cumulatively across a message array', async () => {
-    // Two parts each 60 chars — cumulative 120 — but the cap is per-
-    // sanitizePii-call (per part). With a cap of 100 each individual
-    // part is under-cap and must pass.
+    // Two 60-char parts total 120, yet each is under the 100 cap on its own.
     const mw = createPiiMiddleware({ maxInputLength: 100 });
     const partA = 'a'.repeat(60);
     const partB = 'b'.repeat(60);
@@ -289,9 +251,6 @@ describe('createPiiMiddleware — maxInputLength threading', () => {
   });
 
   it('passes through non-prompt params untouched when over-cap throws', async () => {
-    // Sanity check that the middleware error propagates cleanly without
-    // half-mutating params. We use Promise.catch so the test surface
-    // stays explicit.
     const mw = createPiiMiddleware({ maxInputLength: 10 });
     const bigString = 'a'.repeat(100);
     let caught: unknown = null;

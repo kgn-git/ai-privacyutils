@@ -59,6 +59,10 @@ Gates: `npx vitest run` → `Test Files 1 failed / 17 passed (18)` · `Tests 1 f
 - The `test` CI job now runs the ratio e2e (needs `git`, present on the runner); coverage `include` is `src/**` only.
 - The gitignored `.claude/CLAUDE.md` still carries the expert roster; the tracked `CLAUDE.md` does not — the roster is not in git.
 
+## CI on PR #75 (run 34100992333 @ `ef79029`, 2026-09-07 08:31 UTC)
+
+`lint` (eslint, then `comment-ratio: 17 of 35 in-scope files over the line at HEAD 0914a3d, 17 of 30 at base 54113fb (origin/main tip, shallow clone) — pass`), `typecheck`, `redos-scan`, `audit`, `dependency-review`: **pass**. `test`: **fail** on the same `locale-patterns.test.ts:567` benchmark (23.9 ms on the runner), `Test Files 1 failed | 17 passed (18)` — the ratio e2e ran green on the runner.
+
 ## Code Review (left blank — dispatcher populates after SD-002 review)
 
 - Verdict: pending dispatcher review

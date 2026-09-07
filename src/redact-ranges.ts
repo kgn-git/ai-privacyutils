@@ -10,15 +10,9 @@ export interface ByteRange {
   end: number;
 }
 
-// Merges overlapping or touching `[start, end)` ranges, then replaces each
-// merged range with `token` from the end backwards so earlier offsets stay valid.
-export function redactRanges(
-  text: string,
-  ranges: ReadonlyArray<ByteRange>,
-  token: string,
-): string {
-  if (ranges.length === 0) return text;
-
+// Sorts a copy by start (longest first on a tie) and folds overlapping or
+// touching `[start, end)` ranges into disjoint plain pairs.
+export function mergeRanges(ranges: ReadonlyArray<ByteRange>): ByteRange[] {
   const sorted = [...ranges].sort(
     (a, b) => a.start - b.start || b.end - a.end,
   );
@@ -28,10 +22,22 @@ export function redactRanges(
     if (last && r.start <= last.end) {
       if (r.end > last.end) last.end = r.end;
     } else {
-      merged.push({ ...r });
+      merged.push({ start: r.start, end: r.end });
     }
   }
+  return merged;
+}
 
+// Replaces each merged range with `token` from the end backwards so earlier
+// offsets stay valid.
+export function redactRanges(
+  text: string,
+  ranges: ReadonlyArray<ByteRange>,
+  token: string,
+): string {
+  if (ranges.length === 0) return text;
+
+  const merged = mergeRanges(ranges);
   let out = text;
   for (let i = merged.length - 1; i >= 0; i -= 1) {
     const { start, end } = merged[i]!;

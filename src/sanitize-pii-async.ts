@@ -65,6 +65,7 @@
  */
 
 import { sanitizePii, type SanitizePiiOptions } from './sanitize-pii.js';
+import { mergeRanges } from './redact-ranges.js';
 import { tokensFor } from './token-format.js';
 import {
   DEFAULT_MAX_INPUT_LENGTH,
@@ -119,31 +120,6 @@ export interface SanitizePiiAsyncOptions extends SanitizePiiOptions {
 }
 
 /**
- * Sort + merge overlapping NER spans into disjoint ranges. Same pattern
- * as `redactLocalePhones` at `sanitize-pii.ts:130–177` (sort by start asc /
- * end desc so nested ranges are picked up by the first iteration; merge
- * adjacent overlapping ranges into a single span).
- */
-function mergeSpans(
-  spans: ReadonlyArray<NerSpan>,
-): Array<{ start: number; end: number }> {
-  if (spans.length === 0) return [];
-  const ranges = spans
-    .map((s) => ({ start: s.start, end: s.end }))
-    .sort((a, b) => a.start - b.start || b.end - a.end);
-  const merged: Array<{ start: number; end: number }> = [];
-  for (const r of ranges) {
-    const last = merged[merged.length - 1];
-    if (last && r.start <= last.end) {
-      if (r.end > last.end) last.end = r.end;
-    } else {
-      merged.push({ ...r });
-    }
-  }
-  return merged;
-}
-
-/**
  * Apply NER redactions onto an already-regex-redacted string.
  *
  * Algorithm: for each merged NER span (in reverse-start order — same
@@ -163,7 +139,7 @@ export function applyNerRedactions(
   token: string,
 ): string {
   if (nerSpans.length === 0) return regexRedacted;
-  const merged = mergeSpans(nerSpans);
+  const merged = mergeRanges(nerSpans);
   let out = regexRedacted;
   // Process in reverse start order for symmetry with redactLocalePhones at
   // sanitize-pii.ts:130-160. Note: this implementation uses indexOf on the

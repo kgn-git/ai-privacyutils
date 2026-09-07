@@ -116,7 +116,7 @@ describe('comment-ratio against a real git repository', { timeout: 60_000 }, () 
     commit(repo, NEW, 'add new');
     const cloneDir = mkdtempSync(join(tmpdir(), 'comment-ratio-shallow-'));
     try {
-      const url = `file:///${repo.replace(/\\/g, '/').replace(/^\//, '')}`;
+      const url = `file://${repo.replace(/\\/g, '/')}`;
       git(cloneDir, 'clone', '-q', '--depth=1', '--branch', 'feat', url, 'clone');
       const clone = join(cloneDir, 'clone');
       expect(git(clone, 'rev-parse', '--is-shallow-repository').trim()).toBe('true');

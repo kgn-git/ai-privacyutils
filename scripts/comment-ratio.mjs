@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
  * Comment-ratio ratchet for CI. Every in-scope file at HEAD is measured against the same file at the
- * base: the merge base with `COMMENT_RATIO_BASE` (default `origin/main`), or in a shallow clone that
- * ref's tip — which on a pull-request merge checkout is the merge base. A file is over the line when
- * its comment lines exceed `RATIO` of its code lines, from `RATIO_FLOOR` comment lines up. Fails when
- * a file added since the base is over the line, when a file over the line gained comment lines, or
- * when the count of files over the line rose. Lines are classified by `lib/strip-comments.mjs`.
- * Exit 0 pass · 1 offenders, one line each · 2 the checker failed (fail closed).
+ * merge base of HEAD and `COMMENT_RATIO_BASE` (default `origin/main`). When no merge base is reachable
+ * (a shallow clone cut above it) the check stops with exit 2 rather than measuring another commit. A file
+ * is over the line when its comment lines exceed `RATIO` of its code lines, from `RATIO_FLOOR` comment
+ * lines up. Fails when a file added since the base is over the line, when a file over the line gained
+ * comment lines, or when the count of files over the line rose. Lines are classified by
+ * `lib/strip-comments.mjs`. Exit 0 pass · 1 offenders, one line each · 2 the checker failed (fail closed):
+ * a git error, no merge base, or no in-scope file at HEAD.
  */
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -39,10 +40,15 @@ export function parseRenames(output) {
 
 const text = (buf) => buf.toString('utf8').trim();
 
+/** The merge base of `baseRef` and HEAD; when git finds none, the error names the shallow-clone fix. */
 export function resolveBase(git, baseRef) {
   const shallow = text(git(['rev-parse', '--is-shallow-repository'])) === 'true';
-  const rev = shallow ? baseRef : text(git(['merge-base', baseRef, 'HEAD']));
-  return { rev: text(git(['rev-parse', '--verify', `${rev}^{commit}`])), shallow };
+  try {
+    return text(git(['merge-base', baseRef, 'HEAD']));
+  } catch (e) {
+    const hint = shallow ? ' (shallow clone — fetch the full history: actions/checkout fetch-depth: 0)' : '';
+    throw new Error(`no merge base between ${baseRef} and HEAD${hint}: ${e?.message ?? e}`);
+  }
 }
 
 /** Blob bytes per `<rev>:<path>` spec from one `git cat-file --batch`; a spec git cannot resolve throws. */
@@ -96,18 +102,18 @@ export function formatOffender({ kind, path: filePath, code, comment, oldComment
 export function run({ git, env = process.env, log = console.log, error = console.error, classify = classifyLines }) {
   try {
     const baseRef = env.COMMENT_RATIO_BASE || DEFAULT_BASE;
-    const { rev, shallow } = resolveBase(git, baseRef);
+    const rev = resolveBase(git, baseRef);
     const headSha = text(git(['rev-parse', '--verify', 'HEAD^{commit}']));
     const renames = parseRenames(git(['diff', '--name-status', '-M', '-z', rev, 'HEAD']).toString('utf8'));
     const base = measure(git, rev, classify);
     const head = measure(git, 'HEAD', classify);
+    if (head.size === 0) throw new Error('no in-scope file at HEAD — nothing was measured');
     const { offenders, baseCount, headCount } = evaluate(base, head, renames);
     for (const o of offenders) error(formatOffender(o));
     const rose = headCount > baseCount;
     if (rose) error(`comment-ratio: files over the line rose from ${baseCount} to ${headCount} — the count never rises.`);
-    const how = shallow ? `${baseRef} tip, shallow clone` : `merge base with ${baseRef}`;
     const verdict = offenders.length === 0 && !rose ? 'pass' : 'FAIL';
-    log(`comment-ratio: ${headCount} of ${head.size} in-scope files over the line at HEAD ${headSha.slice(0, 7)}, ${baseCount} of ${base.size} at base ${rev.slice(0, 7)} (${how}) — ${verdict}`);
+    log(`comment-ratio: ${headCount} of ${head.size} in-scope files over the line at HEAD ${headSha.slice(0, 7)}, ${baseCount} of ${base.size} at base ${rev.slice(0, 7)} (merge base with ${baseRef}) — ${verdict}`);
     return verdict === 'pass' ? 0 : 1;
   } catch (e) {
     error(`comment-ratio: internal error — ${e?.message ?? e}`);

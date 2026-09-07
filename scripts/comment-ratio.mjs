@@ -40,7 +40,7 @@ export function parseRenames(output) {
 
 const text = (buf) => buf.toString('utf8').trim();
 
-/** The merge base of `baseRef` and HEAD; when git finds none, the error names the shallow-clone fix. */
+/** The merge base of `baseRef` and HEAD; when git finds none, the error names the shallow-clone fix if the clone is shallow. */
 export function resolveBase(git, baseRef) {
   const shallow = text(git(['rev-parse', '--is-shallow-repository'])) === 'true';
   try {

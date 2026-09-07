@@ -65,8 +65,12 @@ describe('comment-ratio — parseRenames: `git diff --name-status -M -z base hea
 });
 
 describe('comment-ratio — evaluate: the three ratchet rules', () => {
-  const CODE = 100;
+  const CODE = 200;
   const AT_LINE = RATIO * CODE;
+
+  it('the boundary fixture sits above the floor, so the ratio and not the floor decides it', () => {
+    expect(AT_LINE).toBeGreaterThanOrEqual(RATIO_FLOOR);
+  });
 
   it('a file added at the line passes; one comment line over is a new-file offender', () => {
     expect(evaluate(m([]), m([[NEW, CODE, AT_LINE]]), new Map()).offenders).toEqual([]);
@@ -82,14 +86,14 @@ describe('comment-ratio — evaluate: the three ratchet rules', () => {
   });
 
   it('an existing file over the line: one more comment line is an offender, the same or fewer passes', () => {
-    const base = m([[HEAVY, CODE, 40]]);
-    const r = evaluate(base, m([[HEAVY, CODE, 41]]), new Map());
-    expect(r.offenders).toEqual([{ kind: 'worsened', path: HEAVY, code: CODE, comment: 41, oldComment: 40 }]);
+    const base = m([[HEAVY, 100, 40]]);
+    const r = evaluate(base, m([[HEAVY, 100, 41]]), new Map());
+    expect(r.offenders).toEqual([{ kind: 'worsened', path: HEAVY, code: 100, comment: 41, oldComment: 40 }]);
     expect(formatOffender(r.offenders[0])).toBe(
-      `${HEAVY}: 40 → 41 comment lines on ${CODE} code lines — comment ≤ ${RATIO * 100}% of code, from ${RATIO_FLOOR} comment lines`,
+      `${HEAVY}: 40 → 41 comment lines on 100 code lines — comment ≤ ${RATIO * 100}% of code, from ${RATIO_FLOOR} comment lines`,
     );
-    expect(evaluate(base, m([[HEAVY, CODE, 40]]), new Map()).offenders).toEqual([]);
-    expect(evaluate(base, m([[HEAVY, CODE, 39]]), new Map()).offenders).toEqual([]);
+    expect(evaluate(base, m([[HEAVY, 100, 40]]), new Map()).offenders).toEqual([]);
+    expect(evaluate(base, m([[HEAVY, 100, 39]]), new Map()).offenders).toEqual([]);
   });
 
   it('a file under the line may gain comment lines', () => {

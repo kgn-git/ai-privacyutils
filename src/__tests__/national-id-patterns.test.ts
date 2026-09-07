@@ -16,35 +16,8 @@ import {
 } from '../patterns.js';
 import { TOKEN_FORMATS } from '../token-format.js';
 
-/**
- * Test suite for R10 (national-level identifier patterns) — v1.1 additive.
- *
- * Closes compliance review R10 (residual risk, low severity). v1.0.0 had
- * zero coverage of national identifiers; v1.1 adds locale-aware validator
- * factories for UK NINO, FR NIR, IT Codice Fiscale, ES DNI, and PT NIF.
- * Germany (Steuer-ID / Rentenversicherungsnummer) is deferred per issue
- * scope.
- *
- * ## Synthetic fixtures
- *
- * Real national IDs are PII themselves, so every fixture below is
- * synthesised from the check-digit algorithms exported alongside the
- * validators. The synthesis path:
- *
- *   1. Pick a bare 8-digit body (DNI) / 8-digit body (NIF) / 13-digit
- *      body (NIR) / 15-char body (Codice Fiscale).
- *   2. Compute the check digit / letter via the production algorithm.
- *   3. Concatenate into the fixture string.
- *
- * This keeps tests honest: if the algorithm is wrong, the fixture's check
- * digit is wrong, and BOTH production code and test collapse together —
- * which the adversarial "wrong check digit" negative tests catch by
- * asserting specific rejection of hand-crafted invalid inputs.
- */
-
-// -----------------------------------------------------------------------
-// Factory API — dictionary shape + validator contract
-// -----------------------------------------------------------------------
+// Fixtures are synthesised from the exported check helpers, so a wrong algorithm breaks fixture and
+// implementation together, while the hand-written wrong-check cases still assert rejection. No real ID appears.
 
 describe('piiPatterns.nationalIdByLocale — dictionary shape + validator contract', () => {
   it('exposes uk/fr/it/es/pt factory functions', () => {
@@ -62,7 +35,6 @@ describe('piiPatterns.nationalIdByLocale — dictionary shape + validator contra
       expect(typeof a).toBe('function');
       expect(typeof b).toBe('function');
       expect(a).not.toBe(b);
-      // Validator is a (candidate: string) => boolean contract.
       expect(a('obviously-not-a-national-id')).toBe(false);
       expect(b('obviously-not-a-national-id')).toBe(false);
     }
@@ -77,10 +49,6 @@ describe('piiPatterns.nationalIdByLocale — dictionary shape + validator contra
     expect(typeof nationalIdPtValidator).toBe('function');
   });
 });
-
-// -----------------------------------------------------------------------
-// UK NINO — regex-only (no check digit), structural suffix constraint
-// -----------------------------------------------------------------------
 
 describe('UK NINO — regex-only structural validation', () => {
   const isValidUk = nationalIdUkValidator();
@@ -97,7 +65,6 @@ describe('UK NINO — regex-only structural validation', () => {
   });
 
   it('rejects invalid suffix letter (must be A/B/C/D)', () => {
-    // E is outside the permitted suffix set per HMRC NINO rules.
     expect(isValidUk('AB123456E')).toBe(false);
     expect(isValidUk('AB123456Z')).toBe(false);
   });
@@ -113,7 +80,6 @@ describe('UK NINO — regex-only structural validation', () => {
   });
 
   it('rejects forbidden NINO prefix letters (D/F/I/Q/U/V in either position, O in 2nd)', () => {
-    // HMRC disallows certain prefix letters.
     expect(isValidUk('DA123456C')).toBe(false);
     expect(isValidUk('QQ123456C')).toBe(false);
     expect(isValidUk('AO123456C')).toBe(false);
@@ -126,29 +92,17 @@ describe('UK NINO — regex-only structural validation', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// ES DNI — mod-23 check letter
-// -----------------------------------------------------------------------
-
 describe('ES DNI — mod-23 check letter validation', () => {
   const isValidEs = nationalIdEsValidator();
 
   it('computes check letter per mod-23 lookup table', () => {
-    // TRWAGMYFPDXBNJZSQVHLCKE indexed by (digits % 23).
-    // 12345678 % 23 = 14 → index 14 → 'Z' (T R W A G M Y F P D X B N J Z)
+    // 12345678 % 23 = 14 → index 14 of TRWAGMYFPDXBNJZSQVHLCKE = Z; 0 → T; 1 → R.
     expect(computeEsDniCheckLetter('12345678')).toBe('Z');
-    // 00000000 % 23 = 0 → 'T'
     expect(computeEsDniCheckLetter('00000000')).toBe('T');
-    // 00000001 % 23 = 1 → 'R'
     expect(computeEsDniCheckLetter('00000001')).toBe('R');
   });
 
   it('computeEsDniCheckLetter rejects non-8-digit body with empty string (security-expert finding S1)', () => {
-    // The exported helper is callable directly by consumers, not just via
-    // the validator wrapper. Per S1 it must guard length + non-digit input
-    // so a short or mixed input does not silently produce a letter (which
-    // a caller might mistake for "valid"). Symmetric with
-    // computePtNifCheckDigit's `-1` sentinel guard.
     expect(computeEsDniCheckLetter('123')).toBe(''); // too short
     expect(computeEsDniCheckLetter('1234567A')).toBe(''); // letter in body
     expect(computeEsDniCheckLetter('123456789')).toBe(''); // too long
@@ -163,7 +117,6 @@ describe('ES DNI — mod-23 check letter validation', () => {
   });
 
   it('rejects DNI with WRONG check letter', () => {
-    // 12345678 should be Z, not A.
     expect(isValidEs('12345678A')).toBe(false);
     expect(isValidEs('12345678B')).toBe(false);
   });
@@ -192,19 +145,13 @@ describe('check helpers — sentinel on a wrong-shape body', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// PT NIF — mod-11 weighted check digit
-// -----------------------------------------------------------------------
-
 describe('PT NIF — mod-11 weighted check digit validation', () => {
   const isValidPt = nationalIdPtValidator();
 
   it('computes check digit per weighted mod-11', () => {
-    // Weights [9,8,7,6,5,4,3,2] over first 8 digits.
-    // For '12345678': 1*9+2*8+3*7+4*6+5*5+6*4+7*3+8*2 =
-    //   9+16+21+24+25+24+21+16 = 156. 156 % 11 = 2. check = 11-2 = 9.
+    // '12345678': 1*9+2*8+3*7+4*6+5*5+6*4+7*3+8*2 = 156; 156 % 11 = 2; check = 11 - 2 = 9.
     expect(computePtNifCheckDigit('12345678')).toBe(9);
-    // For '00000000': sum=0, 0%11=0 → check=0
+    // '00000000': sum 0, remainder 0 → check 0.
     expect(computePtNifCheckDigit('00000000')).toBe(0);
   });
 
@@ -215,13 +162,8 @@ describe('PT NIF — mod-11 weighted check digit validation', () => {
   });
 
   it('rejects NIF with WRONG check digit', () => {
-    // 12345678 should have check 9, not 0.
     expect(isValidPt('123456780')).toBe(false);
-    // Order-number shape that happens to be 9 digits but invalid check.
-    // '123456789' → body '12345678' wants check 9 → TRUE positive risk.
-    // That is the highest false-positive we have to accept: 1/11 of random
-    // 9-digit sequences will pass mod-11. The `tokenFormat` layer + the
-    // pipeline-order guard limit the blast radius.
+    // `123456789` would pass — body 12345678 wants check 9; that is the accepted 1-in-11 exposure.
   });
 
   it('rejects wrong shape (not 9 digits)', () => {
@@ -231,33 +173,18 @@ describe('PT NIF — mod-11 weighted check digit validation', () => {
   });
 
   it('known false-positive exposure: any random 9-digit run with a valid check digit will pass', () => {
-    // Documented acceptance (AC note): 9-digit PT NIF has a 1/11 random
-    // false-positive rate. The mod-11 check brings this down from 1/1
-    // (bare 9 digits) but cannot eliminate it.
     const body = '00000000';
     const check = computePtNifCheckDigit(body);
-    // '000000000' is structurally a valid NIF under our validator — that
-    // is by design (we cannot disambiguate without context). sanitizePii
-    // pipeline ordering + adversarial tests below confirm this does not
-    // regress higher-precision patterns (email, phone, addresses).
     expect(isValidPt(`${body}${check}`)).toBe(true);
   });
 });
-
-// -----------------------------------------------------------------------
-// FR NIR — mod-97 check key (13 + 2)
-// -----------------------------------------------------------------------
 
 describe('FR NIR — mod-97 check key validation', () => {
   const isValidFr = nationalIdFrValidator();
 
   it('computes 2-digit check key per mod-97', () => {
-    // Check key = 97 - (13-digit-number mod 97).
-    // Synthetic placeholder body — sex=2 / year=00 / month=00 / dept=00 /
-    // commune=000 / seq=001. Not a real demographic profile (dept=00 is
-    // unassigned in the official INSEE département list; month=00 is
-    // outside the spec range, but the validator does not gate on month —
-    // mod-97 alone catches malformed NIRs). SD-002 review C1 on PR #36.
+    // Synthetic body: sex 2, year 00, month 00, département 00 (unassigned), commune 000, sequence 001 — not a
+    // real profile; the validator does not gate on month, the check key alone catches malformed bodies.
     const key = computeFrNirCheckKey('2000000000001');
     expect(typeof key).toBe('string');
     expect(key).toMatch(/^\d{2}$/);
@@ -270,8 +197,6 @@ describe('FR NIR — mod-97 check key validation', () => {
   });
 
   it('accepts synthetic NIR with space-separated groups', () => {
-    // Spaced canonical form: 2 00 00 00000 001 <key>. Not a real
-    // demographic profile.
     const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
     const formatted = `2 00 00 00000 001 ${key}`;
@@ -281,15 +206,11 @@ describe('FR NIR — mod-97 check key validation', () => {
   it('rejects NIR with WRONG check key', () => {
     const body = '2000000000001';
     const key = computeFrNirCheckKey(body);
-    // Flip the check key to something else.
     const wrongKey = key === '00' ? '01' : '00';
     expect(isValidFr(`${body}${wrongKey}`)).toBe(false);
   });
 
   it('rejects invalid sex digit (not 1 or 2)', () => {
-    // NIR's first digit is 1 (male) or 2 (female). 3-9 are invalid.
-    // Bodies use the synthetic placeholder shape (year=00 / month=00 /
-    // dept=00 / commune=000 / seq=001) — not real demographics.
     expect(isValidFr('300000000000114')).toBe(false);
     expect(isValidFr('000000000000114')).toBe(false);
   });
@@ -300,16 +221,10 @@ describe('FR NIR — mod-97 check key validation', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// IT Codice Fiscale — position-weighted check letter
-// -----------------------------------------------------------------------
-
 describe('IT Codice Fiscale — position-weighted check letter validation', () => {
   const isValidIt = nationalIdItValidator();
 
   it('computes check letter per position-weighted table', () => {
-    // Body: 15 chars. E.g. 'RSSMRA85T10A562' (Mario Rossi, born 10 Dec
-    // 1985 in "A562" municipality).
     const letter = computeItCodiceFiscaleCheckLetter('RSSMRA85T10A562');
     expect(letter).toMatch(/^[A-Z]$/);
   });
@@ -323,23 +238,17 @@ describe('IT Codice Fiscale — position-weighted check letter validation', () =
   it('rejects Codice Fiscale with WRONG check letter', () => {
     const body = 'RSSMRA85T10A562';
     const check = computeItCodiceFiscaleCheckLetter(body);
-    // Flip to a different letter.
     const wrong = check === 'A' ? 'B' : 'A';
     expect(isValidIt(`${body}${wrong}`)).toBe(false);
   });
 
   it('rejects wrong structural shape', () => {
-    // Position-by-position structure requires specific letter/digit types.
     expect(isValidIt('123MRA85T10A562X')).toBe(false); // digits in surname
     expect(isValidIt('RSSMRA99T10A562X')).toBe(false); // will fail check
     expect(isValidIt('RSSMRA85T10A56')).toBe(false); // 14 chars
     expect(isValidIt('RSSMRA85T10A5622X')).toBe(false); // 17 chars
   });
 });
-
-// -----------------------------------------------------------------------
-// sanitizePii pipeline — redacts national IDs across locales
-// -----------------------------------------------------------------------
 
 describe('sanitizePii — redacts national IDs across locales', () => {
   it('redacts UK NINO (compact form)', () => {
@@ -363,7 +272,6 @@ describe('sanitizePii — redacts national IDs across locales', () => {
   });
 
   it('does NOT redact ES DNI with INVALID check letter', () => {
-    // 12345678A is invalid (correct is Z). Must pass through.
     const out = sanitizePii('DNI: 12345678A');
     expect(out).not.toContain('[nationalId]');
     expect(out).toContain('12345678A');
@@ -377,7 +285,6 @@ describe('sanitizePii — redacts national IDs across locales', () => {
   });
 
   it('does NOT redact bare 9-digit sequence with INVALID NIF check', () => {
-    // 123456780 → invalid (correct check is 9). Must pass through.
     const out = sanitizePii('Order: 123456780');
     expect(out).not.toContain('[nationalId]');
     expect(out).toContain('123456780');
@@ -421,17 +328,11 @@ describe('sanitizePii — redacts national IDs across locales', () => {
   });
 
   it('does NOT false-positive on dates packed without separators (20260420)', () => {
-    // 8-digit date should not match any of our national-ID patterns
-    // (DNI = 8 digits + LETTER, NIF = 9 digits, etc).
     const out = sanitizePii('Date: 20260420');
     expect(out).not.toContain('[nationalId]');
     expect(out).toContain('20260420');
   });
 });
-
-// -----------------------------------------------------------------------
-// Pipeline ordering — mixed PII must all redact correctly
-// -----------------------------------------------------------------------
 
 describe('sanitizePii — pipeline order: national IDs compose with email/phone/address', () => {
   it('redacts email AND national ID in the same input', () => {
@@ -462,10 +363,6 @@ describe('sanitizePii — pipeline order: national IDs compose with email/phone/
     expect(out).toContain('[nationalId]');
   });
 });
-
-// -----------------------------------------------------------------------
-// Idempotency — running sanitizePii twice yields byte-identical output
-// -----------------------------------------------------------------------
 
 describe('sanitizePii — idempotency on national-ID inputs', () => {
   it('UK NINO: second-pass is byte-identical (readable)', () => {
@@ -517,10 +414,6 @@ describe('sanitizePii — idempotency on national-ID inputs', () => {
   });
 });
 
-// -----------------------------------------------------------------------
-// Token format — [nationalId] + <<REDACTED_NATIONALID>> pattern-disjoint
-// -----------------------------------------------------------------------
-
 describe('TOKEN_FORMATS — nationalId kind added to both formats', () => {
   it('includes nationalId in both readable and sentinel formats', () => {
     expect(TOKEN_FORMATS.readable.nationalId).toBe('[nationalId]');
@@ -528,8 +421,6 @@ describe('TOKEN_FORMATS — nationalId kind added to both formats', () => {
   });
 
   it('[nationalId] is pattern-disjoint — no existing pattern matches it', () => {
-    // A string containing only the [nationalId] token, sanitised, must
-    // pass through unchanged (no collision with email/phone/address/etc).
     const input = 'Value: [nationalId] present';
     expect(sanitizePii(input)).toBe(input);
   });
@@ -541,8 +432,6 @@ describe('TOKEN_FORMATS — nationalId kind added to both formats', () => {
   });
 
   it('[nationalId] token itself does not match any national-ID validator', () => {
-    // If [nationalId] ever matched one of the validators, a second pass
-    // would replace it again — idempotency would break.
     const token = '[nationalId]';
     expect(nationalIdUkValidator()(token)).toBe(false);
     expect(nationalIdFrValidator()(token)).toBe(false);

@@ -130,7 +130,7 @@ await sanitizePiiAsync(rawCv, { enableNer: true, tokenFormat: 'sentinel' });
 
 **Vercel runtime compatibility.**
 - `sanitizePii` (sync, regex-only, the v1.0/v1.1 surface) → Edge-runtime SAFE (no `compromise` in the bundle graph).
-- `sanitizePiiAsync` with `enableNer: false` → Edge-runtime SAFE (compromise loaded only on first detection call via dynamic `import('compromise')`).
+- `sanitizePiiAsync` with `enableNer: false` → Edge-runtime SAFE (`compromise` is reached only through the dynamic `import('compromise')` that `CompromiseNerEngine` starts in its constructor, and with `enableNer: false` no engine is constructed).
 - `sanitizePiiAsync` with `enableNer: true` → Vercel **Serverless** (Node 20+) only. The 344 KB ESM exceeds the 1 MB Edge practical limit when chained with other modules.
 
 **Cohort benchmark — measured TP/FP rates (v1.2, Windows x64 Node 24, 2026-04-30):**

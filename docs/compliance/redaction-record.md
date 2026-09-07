@@ -36,7 +36,7 @@ Match counts may be logged; matched content may not — not to logs, telemetry, 
 |---|---|---|---|
 | 1 | email | before phone: `test123@example.co` must not lose its digit run to a phone pattern | `redacts email before phone so @domain digit runs are not mis-matched` (`sanitize-pii.test.ts`) |
 | 2 | addresses — EN, FR, DE, IT, ES, PT | before postcodes: `12 rue de la Paix, 75001 Paris` consumes the street first, the residual `75001 Paris` is then a postcode; before phone: a house number must not feed a phone candidate. The six address passes are keyed on different shapes (EN number-first with an English terminator, FR number-first with a street keyword, DE compound suffix, IT/ES/PT prefix keyword); no fixture depends on the order among them — with the EN pass moved last the suite stays green | `redacts a full FR CV header (address + postcode + city + email)` (`locale-patterns.test.ts`); `redacts address before phone so leading house number is not mis-matched` (`sanitize-pii.test.ts`) |
-| 3 | postcodes — UK, FR, DE, IT, ES, PT | after addresses (above); the 5-digit and UK/PT alphanumeric shapes do not overlap the phone patterns | `sanitizePii — UK/French/German/Italian/Spanish/Portuguese postcodes (R1)` blocks (`locale-patterns.test.ts`) |
+| 3 | postcodes — UK, FR, DE, IT, ES, PT | after addresses (above); the 5-digit and UK/PT alphanumeric shapes do not overlap the phone patterns | `sanitizePii — UK postcodes (R1)`, `sanitizePii — French postcodes (R1)`, `sanitizePii — German postcodes (R1)`, `sanitizePii — Italian postcodes (R1)`, `sanitizePii — Spanish postcodes (R1)`, `sanitizePii — Portuguese postcodes (R1)` (`locale-patterns.test.ts`) |
 | 4 | national IDs — IT, UK, FR, ES, PT (extract, then validate) | before the phone passes: the NANP domestic shape matches ten digits inside a compact 15-digit NIR, so with this pass moved after the phones the NIR fixtures come out as `[phone]`. Its position relative to postcodes and dates is not load-bearing (moved before the postcodes or after the dates, the suite stays green), and neither is the order of its five locales — the `\b` anchors keep the shapes disjoint | `redacts FR NIR with valid mod-97 check key (compact form)`, `redacts FR address + postcode + phone + NIR in mixed input` (`national-id-patterns.test.ts`) |
 | 5 | date of birth — every date shape (`'default'`), or only a cue-labelled date (`'cv'`) | before phones: `libphonenumber-js` accepts `23.05.1985` / `1985-05-23` as DE phone candidates, so the date pass must claim them first; the date shapes cannot match a NANP or EU phone (the separator alternation and `\d{1,2}` middle group exclude `555-123-4567`; FR groups use spaces) | `redacts DD.MM.YYYY (DE-style)`, `redacts YYYY-MM-DD (ISO-style)` (`sanitize-pii.test.ts`); `redacts text parts inside array content` (`pii-middleware.test.ts`, `Born 23.05.1985` → `[dob]`) |
 | 6 | locale phones — FR, DE, GB, IT, ES, PT via `libphonenumber-js` | before the NANP fallback: `06 12 34 56 78` contains a 3-3-4 tail the NANP regex would otherwise take, leaving `06 ` dangling | `does not double-redact: FR number is not re-consumed by NANP fallback` (`locale-phone-patterns.test.ts`) |
@@ -61,7 +61,7 @@ Every pattern is exported as a factory returning a fresh `/g` `RegExp`, never a 
 - The TLD quantifier is greedy: `user@example.中国后文字` is matched whole. Over-redacting an email-shaped token is the accepted direction.
 - `[email]` contains no `@`, so a second pass is a no-op.
 
-Pinned by `idn-email.test.ts` (`emailPattern — IDN support (#3 / R5)`, `sanitizePii — IDN email redaction (#3 / R5)`) and `sanitizePii — email redaction` (`sanitize-pii.test.ts`).
+Pinned by `idn-email.test.ts` (`emailPattern — IDN support (#3 / R5)`, `sanitizePii — IDN email redaction (#3 / R5)`) and `sanitizePii — email redaction (ported from cv-chunker.ts:76)` (`sanitize-pii.test.ts`).
 
 ### 3.3 Street addresses
 
@@ -72,7 +72,7 @@ Pinned by `idn-email.test.ts` (`emailPattern — IDN support (#3 / R5)`, `saniti
 | `addressDePattern` | capitalised prefix `{1,30}`, closed compound suffix (`straße/strasse/str./platz/weg/allee/gasse/ring/damm`), number, optional letter | number-after form is the dominant German shape; a closed suffix set keeps it linear |
 | `addressItPattern`, `addressEsPattern`, `addressPtPattern` | closed prefix keyword (`Via Piazza Corso …` / `Calle Avenida Av. C/ Plaza …` / `Rua R. Avenida Praça Largo …`), 1–5 name tokens, number | prefix-keyword form; the trailing house number is what keeps `Via Lattea visible …` (no number) out and `Via Lattea 5` (structurally an address) in — privacy over precision |
 
-Pinned by `sanitize-pii.test.ts` (`sanitizePii — street address redaction`, the two `CRIT-2 regression guard` cases) and `locale-patterns.test.ts` (per-locale address blocks, `sanitizePii — Italian Via false-positive fixtures (#23 MIN-1)`).
+Pinned by `sanitize-pii.test.ts` (`sanitizePii — street address redaction (ported from cv-chunker.ts:80-83)`, the two `CRIT-2 regression guard` cases) and `locale-patterns.test.ts` (per-locale address blocks, `sanitizePii — Italian Via false-positive fixtures (#23 MIN-1)`).
 
 ### 3.4 Postcodes
 

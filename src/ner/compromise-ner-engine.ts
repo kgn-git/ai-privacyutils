@@ -47,8 +47,8 @@ export const DEFAULT_NER_DENY_LIST: ReadonlyArray<string> = Object.freeze([
 ]);
 
 // `compromise` includes sentence-final punctuation in a span. Characters outside `[\w\s'.-]` are stripped, then
-// one trailing period (below), so `Jr.` keeps its dot. The `{1,16}` bound keeps the regex in the ReDoS lint's safe
-// class; a longer run stays inside the span, which over-redacts rather than leaks.
+// one trailing period (below), so a span-final `Jr.` loses its dot too (record § 5). The `{1,16}` bound keeps the
+// regex in the ReDoS lint's safe class; a longer run stays inside the span, which over-redacts rather than leaks.
 const TRAILING_PUNCT_RE = /[^\w\s'.-]{1,16}$/;
 
 // Typed error for a failed or wrong-shaped `compromise` load (C4); the engine never degrades to "no spans".

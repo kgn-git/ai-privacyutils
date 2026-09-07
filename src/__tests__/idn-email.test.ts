@@ -3,30 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { sanitizePii } from '../sanitize-pii.js';
 import { emailPattern, piiPatterns } from '../patterns.js';
 
-/**
- * Test suite for #3 (R5) — IDN email support per RFC 6531.
- *
- * v1.0.0 email regex was ASCII-only:
- *   [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
- *
- * v1.1 widens the email pattern to accept:
- *   - IDN domains (École, München, 中国 — RFC 5892 / IDNA 2008)
- *   - RFC 6531 / SMTPUTF8 Unicode local parts (françois, müller, ...)
- *   - Punycode domains (xn--mnchen-3ya.de) — matched by both the legacy
- *     ASCII shape and the new Unicode shape since xn-- is ASCII-only
- *   - Mixed forms (IDN local + ASCII domain; ASCII local + IDN domain)
- *
- * Covered fixtures by locale + form:
- *   EN: john.doe@example.com (ASCII baseline — backward compat)
- *   FR: françois@école.fr (IDN local + IDN domain)
- *   DE: müller@münchen.de (IDN local + IDN domain)
- *   DE: user@münchen.de (ASCII local + IDN domain)
- *   IT: andrea@università.it (ASCII local + IDN domain with à)
- *   ES: maría@correo.es (IDN local + ASCII domain)
- *   PT: joão@empresa.pt (IDN local + ASCII domain)
- *   Punycode: user@xn--mnchen-3ya.de (ASCII punycode form)
- *   IDN TLD: user@example.中国 (ASCII local + Unicode TLD)
- */
+// Fixtures cover ASCII, IDN local parts, IDN domains, punycode and a Unicode TLD across the six locales.
 
 describe('emailPattern — IDN support (#3 / R5)', () => {
   it('still matches plain ASCII email (backward compat)', () => {
@@ -78,11 +55,8 @@ describe('emailPattern — IDN support (#3 / R5)', () => {
   });
 
   it('greedily matches Unicode-word TLD with no separator (over-redaction acceptable for privacy)', () => {
-    // The TLD quantifier {2,24} consumes trailing Unicode letters up to the ceiling.
-    // user@example.中国后文字 (5-char Unicode TLD-lookalike) is matched as a single
-    // email. Over-redaction of an email-shaped token is the correct privacy trade-off —
-    // the lookahead (?![\p{L}\p{N}-]) prevents EXTENSION into following chars, not
-    // truncation at semantic TLD boundaries.
+    // The `{2,24}` TLD quantifier consumes trailing Unicode letters; the lookahead stops extension into a
+    // following token, it does not truncate at a semantic TLD boundary. Over-redaction is the safe direction.
     const result = 'user@example.中国后文字'.match(emailPattern());
     expect(result).toEqual(['user@example.中国后文字']);
   });
@@ -138,7 +112,6 @@ describe('sanitizePii — IDN email redaction (#3 / R5)', () => {
   });
 
   it('does not false-match non-email Unicode text', () => {
-    // No '@' — must not match.
     expect(sanitizePii('École normale supérieure')).toBe(
       'École normale supérieure',
     );
@@ -146,7 +119,6 @@ describe('sanitizePii — IDN email redaction (#3 / R5)', () => {
   });
 
   it('preserves v1.0.0 ASCII fixtures byte-equivalent (regression guard)', () => {
-    // Every fixture from sanitize-pii.test.ts email suite must redact identically.
     expect(sanitizePii('Contact me at jane.doe@example.com please.')).toBe(
       'Contact me at [email] please.',
     );
@@ -156,7 +128,6 @@ describe('sanitizePii — IDN email redaction (#3 / R5)', () => {
     expect(
       sanitizePii('Referees: alice@uni.edu and bob.smith@acme.io available.'),
     ).toBe('Referees: [email] and [email] available.');
-    // Twitter-style @handle with no TLD must still NOT match.
     expect(sanitizePii('Follow @acme on socials')).toBe('Follow @acme on socials');
   });
 });

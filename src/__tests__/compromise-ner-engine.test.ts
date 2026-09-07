@@ -140,6 +140,14 @@ describe('CompromiseNerEngine — deny-list (constraint 5)', () => {
     // Sanity: at minimum the constructor accepted the option without throw.
     expect(custom.engineId).toBe('compromise');
   });
+
+  it('a deny-list entry is compared by equality, never compiled as a regex', async () => {
+    const custom = new CompromiseNerEngine({ denyList: ['.*'] });
+    await custom.ready;
+    const text = 'Alice Brown applied.';
+    const spans = await custom.detectPersonSpans(text);
+    expect(spans.map((s) => text.slice(s.start, s.end))).toContain('Alice Brown');
+  });
 });
 
 describe('CompromiseNerEngine — error surface (constraint 7)', () => {

@@ -117,6 +117,29 @@ describe('piiMiddleware.transformParams — messages[*].content', () => {
     });
   });
 
+  it('redacts a reasoning part', async () => {
+    const params = {
+      prompt: [
+        {
+          role: 'assistant',
+          content: [{ type: 'reasoning', text: 'User mail is jane@example.com.' }],
+        },
+      ],
+    };
+    const out = await piiMiddleware.transformParams!({
+      type: 'generate',
+      params: params as never,
+    });
+    const prompt = out.prompt as Array<{
+      role: string;
+      content: Array<{ type: string; text: string }>;
+    }>;
+    expect(prompt[0]!.content[0]!).toEqual({
+      type: 'reasoning',
+      text: 'User mail is [email].',
+    });
+  });
+
   it('handles multiple messages (system + user + assistant)', async () => {
     const params = {
       prompt: [

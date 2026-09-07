@@ -59,6 +59,21 @@ describe('sanitizePiiAsync — enableNer: false (default)', () => {
   it('returns empty string on empty input', async () => {
     expect(await sanitizePiiAsync('')).toBe('');
   });
+
+  it('does not call the supplied engine when enableNer is false', async () => {
+    let calls = 0;
+    const engine: NerEngine = {
+      engineId: 'counting',
+      ready: Promise.resolve(),
+      async detectPersonSpans() {
+        calls += 1;
+        return [];
+      },
+    };
+    const out = await sanitizePiiAsync('Hi Alice Brown.', { nerEngine: engine });
+    expect(out).toBe('Hi Alice Brown.');
+    expect(calls).toBe(0);
+  });
 });
 
 describe('sanitizePiiAsync — enableNer: true with mock engine', () => {

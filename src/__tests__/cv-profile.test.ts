@@ -187,6 +187,17 @@ describe('cv profile — explicitly-labelled DOB still masked', () => {
   });
 });
 
+describe('cv profile — cue boundary', () => {
+  it('a birth cue does not fire inside a longer word and does not reach a later date', () => {
+    expect(sanitizePii('reborn 12/03/1985 as a coder', { profile: 'cv' })).toBe(
+      'reborn 12/03/1985 as a coder',
+    );
+    expect(
+      sanitizePii('born in Lyon, employed from 01/06/2018', { profile: 'cv' }),
+    ).toBe('born in Lyon, employed from 01/06/2018');
+  });
+});
+
 describe('cv profile — default profile unchanged (byte-identical pin)', () => {
   it('default profile still redacts a bare full date to [dob]', () => {
     expect(sanitizePii('Interview on 23/05/1985 confirmed.')).toBe(

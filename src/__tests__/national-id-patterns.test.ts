@@ -181,6 +181,17 @@ describe('ES DNI — mod-23 check letter validation', () => {
   });
 });
 
+describe('check helpers — sentinel on a wrong-shape body', () => {
+  it('every check helper returns its sentinel on a body of the wrong shape', () => {
+    expect(computePtNifCheckDigit('1234567')).toBe(-1);
+    expect(computePtNifCheckDigit('1234567A')).toBe(-1);
+    expect(computeFrNirCheckKey('200000000000')).toBe('');
+    expect(computeFrNirCheckKey('2000000000001A')).toBe('');
+    expect(computeItCodiceFiscaleCheckLetter('RSSMRA85T10A56')).toBe('');
+    expect(computeItCodiceFiscaleCheckLetter('RSSMRA85T10A56-')).toBe('');
+  });
+});
+
 // -----------------------------------------------------------------------
 // PT NIF — mod-11 weighted check digit
 // -----------------------------------------------------------------------
@@ -401,6 +412,12 @@ describe('sanitizePii — redacts national IDs across locales', () => {
     const wrong = check === 'A' ? 'B' : 'A';
     const out = sanitizePii(`CF: ${body}${wrong}`);
     expect(out).not.toContain('[nationalId]');
+  });
+
+  it('a 9-digit run inside a longer word is not a NIF candidate', () => {
+    const body = '12345678';
+    const nif = `${body}${computePtNifCheckDigit(body)}`;
+    expect(sanitizePii(`ref X${nif}Y`)).toBe(`ref X${nif}Y`);
   });
 
   it('does NOT false-positive on dates packed without separators (20260420)', () => {

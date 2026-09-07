@@ -1,4 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+const phoneFinder = vi.hoisted(() => ({ throwFor: null as string | null }));
+
+vi.mock('libphonenumber-js/min', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('libphonenumber-js/min')>();
+  return {
+    ...actual,
+    findPhoneNumbersInText: (text: string, opts: { defaultCountry: string }) => {
+      if (opts.defaultCountry === phoneFinder.throwFor) throw new Error('finder failure');
+      return actual.findPhoneNumbersInText(text, opts as never);
+    },
+  };
+});
 
 import { sanitizePii } from '../sanitize-pii.js';
 import {
@@ -173,6 +186,23 @@ describe('sanitizePii — order of operations (ported §5.5 audit)', () => {
     expect(once).toContain('[phone]');
     expect(once).toContain('[address]');
     expect(twice).toBe(once);
+  });
+});
+
+describe('sanitizePii — locale phone guards', () => {
+  it('a formatted short-code shape that libphonenumber accepts is not redacted', () => {
+    expect(sanitizePii('Tel: 12 34 56 please')).toBe('Tel: 12 34 56 please');
+  });
+
+  it('a throwing phone finder for one locale is swallowed and the other passes still run', () => {
+    phoneFinder.throwFor = 'FR';
+    try {
+      expect(sanitizePii('mail jane@example.com, tel 030 12345678')).toBe(
+        'mail [email], tel [phone]',
+      );
+    } finally {
+      phoneFinder.throwFor = null;
+    }
   });
 });
 

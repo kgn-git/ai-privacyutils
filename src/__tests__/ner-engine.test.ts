@@ -9,6 +9,9 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { NerEngine, NerSpan, NerDetectOptions } from '../ner/ner-engine.js';
 import { NullNerEngine } from '../ner/null-ner-engine.js';
@@ -108,5 +111,27 @@ describe('createNerEngine factory', () => {
   it('exposes ready Promise on returned engine (interface compliance)', async () => {
     const engine = createNerEngine({ enableNer: false });
     await expect(engine.ready).resolves.toBeUndefined();
+  });
+});
+
+describe('compromise is loaded only dynamically', () => {
+  it('no src file imports compromise statically', () => {
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const p = path.join(dir, name);
+        if (statSync(p).isDirectory()) {
+          if (name !== '__tests__') walk(p);
+        } else if (p.endsWith('.ts')) {
+          files.push(p);
+        }
+      }
+    };
+    walk(root);
+    expect(files.length).toBeGreaterThan(10);
+    for (const f of files) {
+      expect(readFileSync(f, 'utf8')).not.toMatch(/^\s*import\b[^;]*['"]compromise['"]/m);
+    }
   });
 });

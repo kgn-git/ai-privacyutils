@@ -74,7 +74,11 @@ Files over the 25 % line: src 12 → 0, tests 5 → 0. Ratchet at HEAD: `comment
 
 - **node:20 Docker** (`docker run --rm -v <repo>:/app -v jobflow_privacyutils_node_modules:/app/node_modules -w /app node:20 npx vitest run`, from PowerShell): `Test Files 3 failed | 16 passed (19)` · `Tests 1 failed | 407 passed (408)`. The one test is `locale-patterns.test.ts:567` (19.9 ms mean vs 10; not edited). The two files are `scripts/__tests__/comment-ratio.test.ts` and `comment-ratio.e2e.test.ts`, which **fail to load** (`SyntaxError: Invalid or unexpected token` at the `.mjs` import) on this host — identically on the host runner and in Docker, and **identically at the base `291d756` in a scratch worktree** (control run 15:08). This branch changes one ASCII word in that file's docblock; `comment-ratio.mjs` imports cleanly under host Node directly. PR-2 recorded both suites green on the CI runner; the PR's CI run is the authority for them.
 - Host `npm test -- src`: `1 failed | 407 passed (408)`, same benchmark. `npm run lint` clean · `npm run build` clean · `npm run redos:scan` 22 `OK … safe`, ends `all patterns safe.` · `tsc --noEmit -p tsconfig.json --incremental false`: 24 errors, file+code multiset identical to `origin/main`'s 24 (all in `src/__tests__`).
-- "CI passed" is not an available claim here; the CI `lint` ratio line is quoted in the PR body once the run exists.
+- "CI passed" is not an available claim here (M3 on #73).
+
+## CI on PR #77 (run 34125938582 @ `f16a457`, 2026-09-07 13:11 UTC)
+
+`lint` — eslint clean, then `comment-ratio: 0 of 36 in-scope files over the line at HEAD d1aa7e5, 17 of 35 at base 291d756 (merge base with origin/main) — pass`; `typecheck`, `redos-scan`, `audit`, `dependency-review`: **pass**. `test`: **fail** on the same `locale-patterns.test.ts` benchmark only (25.1 ms on the runner), `Test Files 1 failed | 18 passed (19)` — `scripts/__tests__/comment-ratio.test.ts` 32/32 and `comment-ratio.e2e.test.ts` 10/10 ran green on the runner, so their load failure on this host is environmental, not a change on this branch. The first run (34125886261 @ `e08e626`) was cancelled by the handover push before its ratio step.
 
 ## Declared, not fixed
 

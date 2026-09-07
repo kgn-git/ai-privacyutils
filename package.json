@@ -42,6 +42,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepare": "npm run build",
     "lint": "eslint src",
+    "lint:ratio": "node scripts/comment-ratio.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

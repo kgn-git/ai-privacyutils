@@ -1,7 +1,10 @@
 # CI workflow — runs on every PR + push to main.
 #
-# Gates (all MUST pass for merge per branch-ruleset main-protected):
-#   1. lint        — ESLint + eslint-plugin-redos
+# Gates (each runs on every PR and push to main; main carries no branch
+# protection or ruleset, so a red gate blocks a merge by maintainer
+# discipline, not by GitHub):
+#   1. lint        — ESLint (max-lines) + eslint-plugin-redos, then the
+#                    comment-ratio ratchet against origin/main
 #   2. typecheck   — tsc --noEmit
 #   3. test        — vitest run with coverage
 #   4. redos-scan  — recheck v4.x programmatic scan over src/patterns.ts
@@ -42,6 +45,10 @@ jobs:
         run: npm ci
       - name: Lint (eslint + eslint-plugin-redos)
         run: npm run lint
+      - name: Comment ratio (ratchet against origin/main)
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+          npm run lint:ratio
 
   typecheck:
     runs-on: ubuntu-24.04

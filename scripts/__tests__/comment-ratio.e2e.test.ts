@@ -111,20 +111,48 @@ describe('comment-ratio against a real git repository', { timeout: 60_000 }, () 
     expect(r.stdout).toMatch(/1 of 2 .*at HEAD .*1 of 1 .*at base/);
   });
 
-  it('a shallow clone with the base fetched at depth 1, as CI does, reaches the same verdict and says so', () => {
+  /** main gains the heavy NEW after the branch point and feat adds the same file: new at the merge base, unchanged at main's tip. */
+  function baseAdvancesWithTheSameFile(): void {
+    git(repo, 'checkout', '-q', 'main');
     writeMixed(repo, NEW, 100, 40);
-    commit(repo, NEW, 'add new');
+    commit(repo, NEW, 'main grows a heavy file');
+    git(repo, 'checkout', '-q', 'feat');
+    writeMixed(repo, NEW, 100, 40);
+    commit(repo, NEW, 'feat adds the same heavy file');
+  }
+
+  function cloneFeat(dir: string, ...flags: string[]): string {
+    git(dir, 'clone', '-q', ...flags, '--branch', 'feat', `file://${repo.replace(/\\/g, '/')}`, 'clone');
+    return join(dir, 'clone');
+  }
+
+  it('a shallow clone whose base advanced after the branch point blocks with exit 2 naming fetch-depth: 0 — never a pass at the tip', () => {
+    baseAdvancesWithTheSameFile();
     const cloneDir = mkdtempSync(join(tmpdir(), 'comment-ratio-shallow-'));
     try {
-      const url = `file://${repo.replace(/\\/g, '/')}`;
-      git(cloneDir, 'clone', '-q', '--depth=1', '--branch', 'feat', url, 'clone');
-      const clone = join(cloneDir, 'clone');
-      expect(git(clone, 'rev-parse', '--is-shallow-repository').trim()).toBe('true');
+      const clone = cloneFeat(cloneDir, '--depth=1');
       git(clone, 'fetch', '-q', '--no-tags', '--depth=1', 'origin', '+refs/heads/main:refs/remotes/origin/main');
+      expect(git(clone, 'rev-parse', '--is-shallow-repository').trim()).toBe('true');
+      const r = ratio(clone);
+      expect(r.status).toBe(2);
+      expect(r.stderr).toMatch(/no merge base between origin\/main and HEAD.*shallow clone.*fetch-depth: 0/);
+      expect(r.stdout).toBe('');
+    } finally {
+      rmSync(cloneDir, { recursive: true, force: true });
+    }
+  });
+
+  it('the same history in a full clone, as CI checks out, is measured at the merge base: the file is new there (exit 1)', () => {
+    baseAdvancesWithTheSameFile();
+    const cloneDir = mkdtempSync(join(tmpdir(), 'comment-ratio-full-'));
+    try {
+      const clone = cloneFeat(cloneDir);
+      git(clone, 'fetch', '-q', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main');
+      expect(git(clone, 'rev-parse', '--is-shallow-repository').trim()).toBe('false');
       const r = ratio(clone);
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain(`${NEW}: new file with 40 comment lines`);
-      expect(r.stdout).toMatch(/origin\/main tip, shallow clone/);
+      expect(r.stderr).toContain(`${NEW}: new file with 40 comment lines on 100 code lines ${tail}`);
+      expect(r.stdout).toMatch(/2 of 2 .*at HEAD .*1 of 1 .*at base .*merge base with origin\/main/);
     } finally {
       rmSync(cloneDir, { recursive: true, force: true });
     }

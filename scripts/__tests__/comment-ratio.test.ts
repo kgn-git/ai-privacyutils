@@ -213,9 +213,18 @@ describe('comment-ratio — run: exit 1 on an offender or a risen count, exit 0 
   });
 
   it('out-of-scope files are never read', () => {
-    const h = harness(repo({ 'README.md': comments(50) }, { 'README.md': comments(60), 'docs/x.md': comments(60) }));
+    const base = { 'src/a.ts': code(5), 'README.md': comments(50) };
+    const h = harness(repo(base, { ...base, 'README.md': comments(60), 'docs/x.md': comments(60) }));
     expect(h.exit).toBe(0);
-    expect(h.git.mock.calls.filter((c) => c[0][0] === 'cat-file')).toEqual([]);
+    const batches = h.git.mock.calls.filter((c) => c[0][0] === 'cat-file').map((c) => c[1]);
+    expect(batches).toEqual([`${BASE_SHA}:src/a.ts\n`, 'HEAD:src/a.ts\n']);
+  });
+
+  it('a HEAD tree with no in-scope file → exit 2, never a 0-of-0 pass', () => {
+    const h = harness(repo({}, { 'README.md': comments(60) }));
+    expect(h.exit).toBe(2);
+    expect(h.err.join('\n')).toMatch(/no in-scope file at HEAD/);
+    expect(h.out).toEqual([]);
   });
 
   it('reads every blob of a side in ONE cat-file --batch call per side', () => {
@@ -233,18 +242,29 @@ describe('comment-ratio — run: exit 1 on an offender or a risen count, exit 0 
   });
 });
 
-describe('comment-ratio — run: the base is the merge base, or the base tip in a shallow clone', () => {
+describe('comment-ratio — run: the base is the merge base; a clone that cannot reach it blocks', () => {
   it('non-shallow: measures the merge base with origin/main and says so', () => {
     const h = harness(repo(heavy, heavy));
     expect(h.git).toHaveBeenCalledWith(['merge-base', DEFAULT_BASE, 'HEAD']);
     expect(h.out.join('\n')).toMatch(/merge base with origin\/main/);
   });
 
-  it('shallow: never calls merge-base, measures the base tip and says the clone is shallow', () => {
+  it('shallow with the merge base reachable: measured at the merge base, never at the tip', () => {
     const h = harness(repo(heavy, heavy, { shallow: true }));
     expect(h.exit).toBe(0);
-    expect(h.git).not.toHaveBeenCalledWith(['merge-base', DEFAULT_BASE, 'HEAD']);
-    expect(h.out.join('\n')).toMatch(/origin\/main tip, shallow clone/);
+    expect(h.git).toHaveBeenCalledWith(['merge-base', DEFAULT_BASE, 'HEAD']);
+    expect(h.git).not.toHaveBeenCalledWith(['rev-parse', '--verify', `${DEFAULT_BASE}^{commit}`]);
+    expect(h.out.join('\n')).toMatch(/merge base with origin\/main/);
+  });
+
+  it('shallow with no merge base: exit 2 naming fetch-depth: 0, nothing measured', () => {
+    const map = repo(heavy, heavy, { shallow: true });
+    map[`merge-base ${DEFAULT_BASE} HEAD`] = new Error('Command failed: git merge-base origin/main HEAD');
+    const h = harness(map);
+    expect(h.exit).toBe(2);
+    expect(h.err.join('\n')).toMatch(/no merge base between origin\/main and HEAD.*shallow clone.*fetch-depth: 0/);
+    expect(h.git).not.toHaveBeenCalledWith(['ls-tree', '-r', '-z', '--name-only', 'HEAD']);
+    expect(h.out).toEqual([]);
   });
 
   it('COMMENT_RATIO_BASE overrides the base ref', () => {

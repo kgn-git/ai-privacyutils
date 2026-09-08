@@ -37,7 +37,7 @@ The deciding compliance argument is that **the status-quo at v1.0/v1.1 is zero n
 
 ADR 003 formally rejected `compromise` ("accuracy floor on multilingual CVs is below the 95% per-cohort TP threshold"). That assertion was made without measurement. The v1.2 fixture set (12 Western European, 6 Maghrebi, 6 East Asian transliterated, 6 Slavic transliterated) measured TP rates of 100% / 100% / 83.3% / 100% — substantially above the ADR 003 expectation.
 
-The accuracy delta vs. an ML engine remains: `compromise` will systematically miss names absent from its English-centric lexicon (French surname/Org-tag collisions; Korean hyphenated compound truncation), and structural CV variants (ALLCAPS headers, surname-first forms) are out of its training set. These limitations are documented under § Known Limitations in ADR 004 and in the README.
+The accuracy delta vs. an ML engine remains: `compromise` will systematically miss names absent from its English-centric lexicon (French surname/Org-tag collisions; Korean hyphenated compound truncation), and structural CV variants (ALLCAPS headers, surname-first forms) are out of its training set. These limitations are documented under § Known Limitations below and, as R3-residual, in `docs/compliance/redaction-record.md` § 5 — the authority for the library's residual gaps.
 
 **Considered alternatives:**
 
@@ -189,7 +189,7 @@ This is acceptable under Art. 25 because the obligation sits with the data contr
 
 The total LLM round-trip for a CV-sized prompt is 800–3000 ms. 55–150 ms of NER overhead is 2–18% of LLM round-trip — noticeable in p50 only.
 
-**Amendment 2026-09-07 (#73 PR-4) — the sync row is no longer a gate.** The `sanitizePii` wall-clock figure is now measured and printed by `src/__tests__/locale-patterns.test.ts`, not asserted; the corresponding middleware measurement in `src/__tests__/pii-middleware.test.ts` is likewise reported only. On a shared runner a wall-clock threshold reports host load rather than the code, so the assertions were removed. The other rows in this table were never test-enforced in this repo. See README § Known Limitations and `docs/compliance/redaction-record.md` § 4 (IMP-1).
+**Amendment 2026-09-07 (#73 PR-4) — the sync row is no longer a gate.** The `sanitizePii` wall-clock figure is now measured and printed by `src/__tests__/locale-patterns.test.ts`, not asserted; the corresponding middleware measurement in `src/__tests__/pii-middleware.test.ts` is likewise reported only. On a shared runner a wall-clock threshold reports host load rather than the code, so the assertions were removed. The other rows in this table were never test-enforced in this repo. See `docs/compliance/redaction-record.md` § 4.1, which carries the removed thresholds and where the printed figures are read.
 
 ## Cohort fairness — re-scoped AC for v1.2
 

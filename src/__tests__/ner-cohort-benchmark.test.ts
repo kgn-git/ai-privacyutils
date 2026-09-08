@@ -1,6 +1,6 @@
 // Cohort 1 (Western European) TP ≥ 70 % is the CI-blocking gate (C1); cohorts 2–4 and the false-positive set are
 // measured and logged without a gate; the ≥ 95 % / ≤ 5 pp target is carried to the ML-engine upgrade (C7). Each
-// fixture holds exactly one name; FP fixtures hold none. Measured rates are reported in README § Known Limitations.
+// fixture holds exactly one name; FP fixtures hold none. Measured rates: ADR 004, and the record § 5 (R3-residual).
 
 import { describe, it, expect, beforeAll } from 'vitest';
 

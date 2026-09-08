@@ -6,7 +6,15 @@ Branch `docs/73-pr5-record-is-authority` · base `main` @ `6cdc1e3` · record = 
 
 ## Commit provenance
 
-`b2c1b52` § 4.1 + § 3.7 + § 3.9 · `5bbdda3` § 5 caller-side row · `6d96d61` README becomes a pointer, six consumers repointed · `2ce37cb` handover · `5b5f069` § 5 severity ratings · `cec0ad3` § 5 planned extensions · `55563d3` five-column enumeration. Every record commit is a pure insertion against the base, and the README commit does not precede them.
+**The complete list, oldest first** — `git log --oneline --reverse 6cdc1e34..HEAD`, all ten commits, none elided:
+
+`b2c1b52` § 4.1 + § 3.7 + § 3.9 · `5bbdda3` § 5 caller-side row · `6d96d61` README becomes a pointer, six consumers repointed · `2ce37cb` handover · `5b5f069` § 5 severity ratings · `58e40ee` CI runs and the short-SHA trap · `cec0ad3` § 5 planned extensions · `55563d3` five-column enumeration · `31592c5` § 5 count corrected to seven of thirteen · `0e2c135` residue narrowed to R5, corpora named, handover split.
+
+**Against the base, the record is purely additive.** `git diff --numstat 6cdc1e34..HEAD -- docs/compliance/redaction-record.md` → **`20  0`**: twenty insertions, **zero deletions**. Nothing that existed in the record at `6cdc1e34` was removed or rewritten in any commit of this PR.
+
+**At commit level the claim is weaker, and the two must not be collapsed.** Per-commit `--numstat` on the record: `b2c1b52` **15 / 0** · `5bbdda3` **1 / 0** · `5b5f069` **2 / 0** · `cec0ad3` **2 / 0** · `31592c5` **1 insertion, 1 deletion**. Four of the five record commits are pure insertions; `31592c5` is not — it replaces one line, and that line is one **this PR itself added at `cec0ad3`**, which is why the against-base deletion count is still zero. (`6d96d61` **12 / 26** and `55563d3` **1 / 1** are README commits, not record commits.)
+
+**Ordering is a disjunction, not a precedence.** `6d96d61`, the README deletion, **precedes three record commits** — `5b5f069`, `cec0ad3` and `31592c5` — so the Severity and Planned columns were written into the record *after* the table was deleted. What holds of every record commit is the disjunction: it either **precedes** the README commit (`b2c1b52`, `5bbdda3`) or **follows it without deleting anything the base carried** (`5b5f069`, `cec0ad3`, `31592c5`). Move-then-delete is safe either way — no fact was ever un-carried, because the deletion removes nothing that the record does not hold at head.
 
 ## Four-fact re-derivation
 
@@ -33,7 +41,7 @@ Which threshold belongs to which test came from source: at `2154652`, `locale-pa
 
 ## Identifier-set criterion
 
-Tokens from the README table **at the parent** `6cdc1e3`, word-boundary matched against record §§ 4–5. Script `tmp/73-pr5/idset.sh`, which **derives** the section bounds from the headings rather than hard-coding them, so the range cannot go stale (it printed `lines 158..236` on the final tree).
+Tokens from the README table **at the parent** `6cdc1e3`, word-boundary matched against record §§ 4–5. Script `tmp/73-pr5/idset.sh`, which **derives** the section bounds from the headings rather than hard-coding them, so the range cannot go stale. It printed `lines 158..236` when it was run at `5b5f069`; on the final tree it prints **`158..238`**, because `## 6. Fixture policy` moved from 237 to 239 at `cec0ad3` — the derivation tracked the move, the transcribed number did not.
 
 ```
 PRESENT R1 R1-residual R2 R2-residual R3 R3-residual R5 R7 R8 R10 R10-residual R11 R11-residual
@@ -45,7 +53,7 @@ ABSENT  R99
 
 ## The deleted table had five columns, so ask all five
 
-Section bounds derived from the headings (§§ 4–5 = lines 158..236 before the fix), not hard-coded.
+Section bounds derived from the headings (§§ 4–5 = lines **158..238** on the final tree; `158..236` at `5b5f069`, before `cec0ad3` lengthened § 5), not hard-coded.
 
 | Column | Carried? | Evidence |
 |---|---|---|
@@ -67,7 +75,7 @@ Re-derived by hand from `6cdc1e34:README.md` § Known Limitations, not taken fro
 |---|---|---|
 | R1-residual | `Future — narrow pattern extensions per compliance re-review` | **yes** — record `:204` `not mitigated; narrow extensions per re-review` |
 | R2-residual | `v1.2 — extend phoneByLocale to additional countries based on consumer demand` | **no** → fixed here |
-| R3 | `ML upgrade — TP ≥95% per-cohort, ≤5pp variance, ≤5% FP, <60 MB bundle, all CI BLOCKING` | **yes** — record `:193` (C7) → `docs/adr/004-ner-engine-compromise.md:228-232`, all five criteria verbatim |
+| R3 | `ML upgrade — backlog issue carries TP ≥95% per-cohort, ≤5pp variance, ≤5% FP, <60 MB bundle, all CI BLOCKING` | **yes** — record `:193` (C7) → `docs/adr/004-ner-engine-compromise.md:228-232`, all five criteria verbatim |
 | R3-residual | `ML upgrade — drop-in replacement via NerEngine abstraction; no consumer API change` | **yes** — record `:208` `ML engine upgrade behind NerEngine (C7)` + ADR 004 `:224` ("without any consumer API change") |
 | R10 | `v1.1 (this release); DE in v1.2` | **no** → fixed here |
 | R10-residual | `v1.2 — DE coverage; future — Corsica NIR + IT omocodia per consumer demand` | **no** → fixed here |
@@ -97,9 +105,21 @@ Not fixed here — the record states current state, and writing version numbers 
 
 Anchored to commits rather than to a moment — polled with `gh run list --commit`, never `gh pr checks --watch`.
 
-- `2ce37cb` — `CI` **success** ([34192490748](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192490748)) · `PR #83` **success** ([34192489606](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192489606))
-- `5b5f069` — `CI` **success** ([34192699033](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192699033)) · `PR #83` **success** ([34192696529](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192696529))
+Enumerated per commit from `gh run list --commit <full SHA>`, every commit on the branch, so the section cannot silently stop short of head. The second workflow is code scanning; `gh` reports its `workflowName` as `CodeQL` and its display title as `PR #83` — the same workflow under two names.
+
+| Commit | `CI` | CodeQL (`PR #83`) |
+|---|---|---|
+| `b2c1b52` · `5bbdda3` · `6d96d61` | — | — |
+| `2ce37cb` | **success** [34192490748](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192490748) | **success** [34192489606](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192489606) |
+| `5b5f069` | **success** [34192699033](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192699033) | **success** [34192696529](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192696529) |
+| `58e40ee` | **success** [34192868297](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192868297) | **success** [34192866165](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192866165) |
+| `cec0ad3` | — | — |
+| `55563d3` | **success** [34194663012](https://github.com/kgn-git/ai-privacyutils/actions/runs/34194663012) | **success** [34194660085](https://github.com/kgn-git/ai-privacyutils/actions/runs/34194660085) |
+| `31592c5` | — | — |
+| `0e2c135` | **success** [34196707656](https://github.com/kgn-git/ai-privacyutils/actions/runs/34196707656) | **success** [34196704794](https://github.com/kgn-git/ai-privacyutils/actions/runs/34196704794) |
+
+⚠️ The dashes are **verified empty, not unchecked** — `gh run list --commit` on each of the five full SHAs returns nothing. Both workflows trigger on `pull_request`, and none of those five was ever the head of a push while the PR was open: `b2c1b52`, `5bbdda3` and `6d96d61` predate the PR, and `cec0ad3` and `31592c5` each arrived in the same push as the commit after them. So an empty result here means "never a workflow head", not "not yet run" — two causes that read identically, and only the push history separates them.
 
 ⚠️ `gh run list --commit` returns an **empty list for a short SHA** and only matches the full 40-character one — a silent zero that reads exactly like "no runs yet". Poll with the full SHA and require a non-empty result before believing a completion.
 
-**Every green CI run postdates the threshold removal** — `gh run list --workflow CI --limit 100` returns only `success` runs dated 2026-09-08, all after it. Correction to the PR body: the earliest green is `34187484246` @ `8811cd3`, not `34189568534` @ `7e53416` — both on the PR-4 branch, so the substance holds.
+**Every green CI run postdates the threshold removal** — `gh run list --workflow CI --limit 100` returns only `success` runs dated 2026-09-08, all after it. **The earliest green is `34187484246` @ `8811cd3`** (`2026-09-08T04:34:41Z`), not `34189568534` @ `7e53416` (`05:09:36Z`) — re-derived here by sorting every `success` CI run by `createdAt`, not carried over. Both are PR-4's, so the substance holds. The correction no longer lives only in this file: #73's body carries it, and the PR #83 description now states it too.

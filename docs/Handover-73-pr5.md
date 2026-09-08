@@ -22,7 +22,7 @@ All three findings were defects in the material round 1 added — evidence writt
 2. **The residue was drawn from the wrong corpus** — round 1 measured the record and concluded about every surface. Six of the eight resolved rows keep their release attribution on the README with the finding ID, R7 through the record's `S12 … as R7` alias. **The genuine residue is one row: R5.** As written, the routing sent someone to mint a `CHANGELOG.md` for what the README already holds while the real gap went unnamed. Narrowed, with a control on the corpus meant.
 3. **A count measured against the wrong thing.** The `Planned` row's "→ 0 across the record" is **1** — `:193`, the C7 row ending "ADR 004 § ML upgrade roadmap" — and its firing control "→ 2" was measured on the README, not the record, where it is **1**. Both corrected, each number naming its corpus.
 
-**Minors.** *Folded at round 1:* #4, the `README.md:265` Direction vocabulary and ID-prefix set. *To the close batch:* #2 and #3 (blocked on the `Finding`-column ruling), #5, #6 (reviewer explicitly recommends **not** rebasing), #8.
+**Minors** (round-1 numbering unless marked). *Folded at round 1:* #4, the `README.md:265` Direction vocabulary and ID-prefix set. *Resolved by the round-2 split, not dropped:* **#7**, the 1,000-word cap — this file is inside it because the counts moved to the evidence companion. *Folded at round 3:* round-3 #3 (R3's `Planned` cell now quoted in full), #5 (the `158..238` span), #6 (the CI table now enumerates every commit). *To the close batch:* #2 and #3 (blocked on the `Finding`-column ruling), #5, #6 (reviewer explicitly recommends **not** rebasing), #8.
 
 ## Gates
 

@@ -2,7 +2,7 @@
 
 **2026-09-08** · branch `docs/73-pr5-record-is-authority` · base `main` @ `6cdc1e3` · last unit of #73.
 
-`b2c1b52` record § 4.1 + § 3.7 + § 3.9 (**15 insertions, 0 deletions**) · `5bbdda3` record § 5 `Caller-side scrubbing` row (**1 insertion, 0 deletions**) · `6d96d61` README becomes a pointer, five consumers repointed. Move-then-delete is provable in history: both record commits precede the README commit and are pure insertions.
+`b2c1b52` § 4.1 + § 3.7 + § 3.9 · `5bbdda3` § 5 caller-side row · `6d96d61` README becomes a pointer, six consumers repointed · `2ce37cb` handover · `5b5f069` § 5 severity ratings. Move-then-delete is provable in history: every record commit is a pure insertion and precedes the README commit or follows it without deleting anything.
 
 ## Four-fact re-derivation
 
@@ -23,13 +23,13 @@ Which threshold belongs to which test came from source: at `2154652`, `locale-pa
 
 `grep -rni "known limitation"` over `README.md docs CLAUDE.md SECURITY.md src` — case-insensitive, which surfaced two live hits the brief's list omitted.
 
-- **Repointed:** `README.md:3`, `:129`; `adr/004…:40` (verified ADR 004 has its own `## Known limitations` at `:209`, so "below" is true); **`adr/004…:192`** → § 4.1 and **`ner-cohort-benchmark.test.ts:3`** → ADR 004 + § 5 — the last two live, neither on the brief's list.
-- **Kept:** `README.md:263`, the heading, so anchors survive; `SECURITY.md:46` already links the record. **Not a pointer:** `README.md:175`, heading of a self-contained R11 paragraph — pointer added, nothing deleted. **Died with the table:** `README.md:274`, prose in the R3-residual row; content is in § 5.
+- **Repointed:** `README.md:3`, `:129`, `:175`; `adr/004…:40` (ADR 004 does have its own `## Known limitations` at `:209`, so "below" is true); **`adr/004…:192`** and **`ner-cohort-benchmark.test.ts:3`** — both live, neither on the brief's list.
+- **Kept:** `README.md:263`, the heading, so anchors survive; `SECURITY.md:46` already links the record. **Died with the table:** `README.md:274`, prose in the R3-residual row; content is in § 5.
 - **Left:** `redaction-record.md:250` (Appendix provenance of the PR-3 sweep — correcting it means editing existing record text) and 23 `Handover-*.md` hits (past work).
 
 ## Identifier-set criterion
 
-Tokens from the README table **at the parent** `6cdc1e3`, word-boundary matched against record lines 158–233. Script `tmp/73-pr5/idset.sh`.
+Tokens from the README table **at the parent** `6cdc1e3`, word-boundary matched against record §§ 4–5. Script `tmp/73-pr5/idset.sh`, which **derives** the section bounds from the headings rather than hard-coding them, so the range cannot go stale (it printed `lines 158..236` on the final tree).
 
 ```
 PRESENT R1 R1-residual R2 R2-residual R3 R3-residual R5 R7 R8 R10 R10-residual R11 R11-residual
@@ -50,7 +50,9 @@ ABSENT  R99
 CI, anchored to commits rather than to a moment — polled with `gh run list --commit`, never `gh pr checks --watch`:
 
 - `2ce37cb` — `CI` **success** ([34192490748](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192490748)) · `PR #83` **success** ([34192489606](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192489606))
-- final head `HEAD_SHA` — `CI` `CI_CONC` (`CI_URL`) · `PR #83` `PR_CONC` (`PR_URL`)
+- final head `5b5f069` — `CI` **success** ([34192699033](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192699033)) · `PR #83` **success** ([34192696529](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192696529))
+
+⚠️ `gh run list --commit` returns an **empty list for a short SHA** and only matches the full 40-character one — a silent zero that reads exactly like "no runs yet". Poll with the full SHA and require a non-empty result before believing a completion.
 
 ## Where brief and body read differently
 
@@ -58,7 +60,7 @@ The body deletes `README.md:285` (the performance paragraph); the brief says **k
 
 ## Deliberately not done
 
-PR-4's Minor (the walk skips `redactMessage`'s string-content and `redactPart`'s `reasoning` branches; 10,824 vs 10,923) → **close batch**. No red proof is available: the surviving assertion is `toBeGreaterThan(9000)`, so the fix **cannot go red alone**; observing it needs a new fixture — test design, inside a doc-only PR.
+PR-4's Minor (the walk skips `redactMessage`'s string-content and `redactPart`'s `reasoning` branches; 10,824 vs 10,923) → **close batch**. The surviving assertion is `toBeGreaterThan(9000)`, so the fix **cannot go red alone**; observing it needs a new fixture — test design, inside a doc-only PR.
 
 ## Downstream Impact
 
@@ -80,6 +82,8 @@ Gates green on branch · TDD N/A, documentation-only — the sole `src/` change 
 **"You exceeded the brief's scope."** Conceded and defended — two census hits and the caller-side-scrubbing fact were missing from lists presented as verified. Leaving a live pointer aimed at a table I had just deleted was the larger error.
 
 **"Is 'every green CI run postdates the removal' measured?"** Yes — `gh run list --workflow CI --limit 100` returns exactly four `success` runs, all 2026-09-08, all after the removal. I did not repeat the retracted "red since 2026-04-28" claim nor assert why pre-04-28 runs failed (logs expired). Correction: the earliest green is `34187484246` @ `8811cd3`, not `34189568534` @ `7e53416` as the body states — both on the PR-4 branch, so the substance holds.
+
+**Word cap.** This file is over the 1,000-word brief cap (figure in the report). Every remaining section is a control the brief names as binding; I cut prose, not evidence, and flag the overage rather than dropping a control to meet it.
 
 **"You verified the three facts you were handed and nearly deleted a column nobody listed."** Conceded, and the sharpest objection here. The ID-set AC checks *tokens*, the four-fact list checks *sentences*; the table's Severity column is neither, so every stated control would have passed green while twelve ratings vanished. Caught only by asking what each deleted **column** carried, not each deleted row — the same question that found the caller-side-scrubbing fact.
 

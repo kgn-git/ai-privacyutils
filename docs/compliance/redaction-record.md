@@ -118,6 +118,8 @@ Each locale is a pair: a loose **extraction regex** over free text (exported so 
 | ES DNI | `\b\d{8}[A-Z]\b` | 8 digits + letter; letter = `TRWAGMYFPDXBNJZSQVHLCKE[body mod 23]` (Agencia Tributaria) |
 | PT NIF | `\b\d{9}\b` | 9 digits; check = weighted sum of digits 1–8 with `[9,8,7,6,5,4,3,2]` mod 11, `0` when the remainder is `0` or `1`, else `11 − remainder` (Decreto-Lei n.º 463/79). The `\b` anchors are the guard against adjacent digit runs |
 
+**Member-State framing (Art. 87).** The five identifiers covered are Member-State-issued national identification numbers, each under its own domestic legal framework; Art. 87 leaves their processing to Member-State law. The library takes no view on lawfulness of processing — it places all five under the destructive one-way redaction contract of section 1, so the identifier does not reach the LLM processor at all. DE Steuer-ID and Rentenversicherungsnummer are not covered (section 5).
+
 Every helper guards its input and returns a sentinel rather than a plausible value on a short or non-digit body: `''` for the letter/key helpers, `-1` for the NIF digit. Every validator returns `false` on a non-string or wrong-shape candidate and never throws. Candidates are not logged.
 
 Pinned by `national-id-patterns.test.ts` (per-locale validation blocks, `computeEsDniCheckLetter rejects non-8-digit body with empty string (security-expert finding S1)`, `every check helper returns its sentinel on a body of the wrong shape`, `sanitizePii — redacts national IDs across locales`, `a 9-digit run inside a longer word is not a NIF candidate`).
@@ -138,6 +140,8 @@ Pinned by `sanitize-pii-async.test.ts`, `merge-ranges.test.ts`, `compromise-ner-
 Readable tokens (`[email] [address] [postcode] [phone] [dob] [nationalId] [person]`) are the default and are byte-identical across releases; changing one is a major-version change. The opt-in sentinel form (`<<REDACTED_EMAIL>>` …) exists because readable tokens collide with user-authored text (`enquiries via the [email] form`) — a low-severity residual (R8).
 
 **Idempotency invariant.** No pattern matches any token, in either format, so a second pass in either format is a no-op: every pattern except email requires a digit — a house number, a postcode, a phone or date digit, an identifier body — and email requires an `@`; no token in either format contains a digit or an `@`. `[person]` and `<<REDACTED_PERSON>>` are additionally not tagged as names by `compromise` (bracket and `<<` are token boundaries; `REDACTED_PERSON` has no proper-noun shape).
+
+**Why the default is still `'readable'`.** Sentinel is the lower-collision form, so it is the shape a future default would take; swapping the default changes the output bytes of every existing caller and is therefore a major-version change. It is deferred to v2.0 under the SemVer policy rather than shipped as a minor, and until then sentinel is reachable only by opting in with `tokenFormat: 'sentinel'`.
 
 Rejected alternatives: a per-call UUID sentinel (breaks determinism and prompt caching for no gain — real text does not contain `<<REDACTED_X>>`); consumer-supplied token strings (they could themselves match a pattern and would need runtime validation); swapping the default to sentinel (a breaking change).
 
@@ -195,6 +199,17 @@ IDs come from the compliance review (R), the security review (S), the tech revie
 | I1b | Explicit T4 gate test for national-ID sentinels | `token-format.test.ts` | `sentinel: national-ID tokens survive double-pass (all 5 shapes — UK/FR/IT/ES/PT)` |
 | I2 | Readable-default test covers `[nationalId]` and asserts no sentinel leaks | `token-format.test.ts` | `produces readable tokens across all token types by default` |
 
+### 4.1 The two wall-clock measurements (IMP-1)
+
+Two tests time a fixed ~10 KB workload of mixed EU-style PII over 10 runs and print the mean. Neither asserts it.
+
+- `src/__tests__/locale-patterns.test.ts` › `sanitizePii regex-only — measured throughput (reported, not gating)` measures the `sanitizePii` regex pipeline alone.
+- `src/__tests__/pii-middleware.test.ts` › `piiMiddleware.transformParams end-to-end — measured throughput (reported, not gating)` measures the middleware end to end, which additionally pays the JSON deep clone and the message traversal.
+
+**The thresholds that were removed.** Until 2026-09-07 each test asserted a millisecond threshold on its mean: `expect(mean).toBeLessThan(10)` — a `< 10 ms` budget — on the regex-only test, and `expect(mean).toBeLessThan(20)` — a `< 20 ms` budget — on the middleware test. Both were removed in #73 PR-4. A wall-clock mean on a shared runner reports what else that runner is doing rather than what the code costs, so such a threshold goes red on host load, not on a redaction or throughput regression, and the failures it produces are indistinguishable from noise. The regex-only assertion was red on the CI `test` job at the point it was removed; every green CI run in this repository's retained history postdates the removal. Each test still asserts its workload size, so the printed figures stay comparable run to run.
+
+**Where a reader finds the figures.** Both tests write a line beginning `[measured] ` to standard output. Read them in the output of `npm test` locally, or in the `test` job log of the CI run for the commit in question.
+
 ## 5. Known limitations
 
 What the library deliberately or currently does not catch. Each is a precision or recall trade recorded so that an auditor reads it here rather than discovering it.
@@ -214,7 +229,12 @@ What the library deliberately or currently does not catch. Each is a precision o
 | Email | Greedy Unicode TLD consumption over-redacts email-shaped tokens (`user@example.中国后文字`) | precision (safe) | by design |
 | Middleware | Request-side only: `wrapGenerate` / `wrapStream` are not implemented, so model responses are not scrubbed by this library | scope | consumer-side post-LLM scrubbing |
 | Cap | The input-length cap is per text part, not summed over a prompt; two 400 KB parts pass a 500 K cap | scope | by design (ADR 002) |
+| Caller-side scrubbing | Structured addresses, postcodes and phones for the six EU locales are covered in-package (R1, R2), so a consumer no longer needs caller-level scrubbing for those classes. Caller-side pre- and post-LLM scrubbing remains a sensible defence-in-depth complement to the middleware, and is the only cover for everything else in this section | scope | by design |
 | Logging | The no-logging clause has no executable control (section 1) | control gap | epic residual |
+
+**Severity, as rated by the compliance review.** The README table this section replaced carried a severity column, reproduced here in full so the ratings are not lost with it. Still open: **R1-residual medium**, **R2-residual low**, **R3-residual low**, **R10-residual low**, **R11-residual medium**. Rated against the gap before it was closed, and now resolved or addressed (section 4 records where): **R1 high**, **R2 high**, **R11 high**, **R3 medium**, **R7 medium**, **R10 medium-low**, **R5 low**, **R8 low**.
+
+**Planned extensions, as recorded in the README table this section replaced.** That table also carried a `Planned` column. Of its thirteen entries, **seven** were forward commitments rather than release attributions of work already done, and **three of those seven were carried nowhere else in this record**. The other four already were: R1-residual and R11-residual in the `Status` cells above, R3 at section 4 C7 (which forwards to ADR 004 § ML upgrade roadmap, where all five acceptance criteria are stated), and R3-residual in the `Status` cell above and in the same ADR section. The three that were carried nowhere are reproduced here so that the rows above are not read as closed decisions. **R2-residual:** extending `phoneByLocale` beyond the six EU locales is a deferred extension, to be taken up on consumer demand — the `by design` status above records that the NANP fallback is the deliberate present behaviour, not that wider locale coverage has been declined. **R10 and R10-residual:** DE Steuer-ID and Rentenversicherungsnummer coverage is deferred (the table carried it on both rows), as are FR NIR Corsica conversion (`2A` / `2B` département) and IT Codice Fiscale omocodia handling, those two on consumer demand. No release target is stated for any of them: the replaced table named `v1.2` for the `phoneByLocale` extension and for DE coverage, and named no release at all for Corsica NIR and IT omocodia — it carried those two as `future`, on consumer demand. v1.3.0 shipped with none of the three, so the trigger is recorded here and the date deliberately is not.
 
 ## 6. Fixture policy
 

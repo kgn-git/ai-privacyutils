@@ -105,7 +105,9 @@ Not fixed here — the record states current state, and writing version numbers 
 
 Anchored to commits rather than to a moment — polled with `gh run list --commit`, never `gh pr checks --watch`.
 
-Enumerated per commit from `gh run list --commit <full SHA>`, every commit on the branch, so the section cannot silently stop short of head. The second workflow is code scanning; `gh` reports its `workflowName` as `CodeQL` and its display title as `PR #83` — the same workflow under two names.
+Enumerated per commit from `gh run list --commit <full SHA>`. The second workflow is code scanning; `gh` reports its `workflowName` as `CodeQL` and its display title as `PR #83` — the same workflow under two names.
+
+⚠️ **A table like this is structurally one row behind head and always will be** — the run for the commit that writes the table does not exist when the table is written. That is what made the round-3 Minor "the CI section stops short of head" un-closable by adding rows. The rule instead: **every commit up to and including the parent of the last row is recorded here; for head itself, run `gh run list --commit $(git rev-parse HEAD)`.**
 
 | Commit | `CI` | CodeQL (`PR #83`) |
 |---|---|---|
@@ -117,6 +119,7 @@ Enumerated per commit from `gh run list --commit <full SHA>`, every commit on th
 | `55563d3` | **success** [34194663012](https://github.com/kgn-git/ai-privacyutils/actions/runs/34194663012) | **success** [34194660085](https://github.com/kgn-git/ai-privacyutils/actions/runs/34194660085) |
 | `31592c5` | — | — |
 | `0e2c135` | **success** [34196707656](https://github.com/kgn-git/ai-privacyutils/actions/runs/34196707656) | **success** [34196704794](https://github.com/kgn-git/ai-privacyutils/actions/runs/34196704794) |
+| `e5a597b` | **success** [34198623567](https://github.com/kgn-git/ai-privacyutils/actions/runs/34198623567) — all six jobs green | **success** [34198620614](https://github.com/kgn-git/ai-privacyutils/actions/runs/34198620614) |
 
 ⚠️ The dashes are **verified empty, not unchecked** — `gh run list --commit` on each of the five full SHAs returns nothing. Both workflows trigger on `pull_request`, and none of those five was ever the head of a push while the PR was open: `b2c1b52`, `5bbdda3` and `6d96d61` predate the PR, and `cec0ad3` and `31592c5` each arrived in the same push as the commit after them. So an empty result here means "never a workflow head", not "not yet run" — two causes that read identically, and only the push history separates them.
 

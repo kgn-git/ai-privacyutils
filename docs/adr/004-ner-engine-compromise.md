@@ -182,8 +182,7 @@ This is acceptable under Art. 25 because the obligation sits with the data contr
 
 | Dimension | Target | Rationale |
 |---|---|---|
-| `sanitizePii` (sync, regex-only, `enableNer: false`) p95 | <20 ms / 10 KB | Existing v1.1 gate, unchanged |
-
+| `sanitizePii` (sync, regex-only, `enableNer: false`) p95 | <10 ms / 10 KB | Existing v1.1 gate, unchanged |
 | `sanitizePiiAsync` (`enableNer: true`) p95 | <150 ms / 10 KB | Renegotiated from ADR 003's <80ms — `compromise` is a full NLP tokenizer+tagger pipeline, not a regex; tech-ops verdict 2026-04-30 confirms 55–120 ms typical on Linux Vercel |
 | Cold-start (first call after Vercel cold-start) | <500 ms | Compromise module parse ~316 ms typical; far below ADR 003's <1.2 s ML target |
 | Bundle delta | <5 MB | Confirmed: ~3.8 MB installed / 344 KB ESM |

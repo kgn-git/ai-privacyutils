@@ -141,9 +141,9 @@ Readable tokens (`[email] [address] [postcode] [phone] [dob] [nationalId] [perso
 
 **Idempotency invariant.** No pattern matches any token, in either format, so a second pass in either format is a no-op: every pattern except email requires a digit — a house number, a postcode, a phone or date digit, an identifier body — and email requires an `@`; no token in either format contains a digit or an `@`. `[person]` and `<<REDACTED_PERSON>>` are additionally not tagged as names by `compromise` (bracket and `<<` are token boundaries; `REDACTED_PERSON` has no proper-noun shape).
 
-**Why the default is still `'readable'`.** Sentinel is the lower-collision form, so it is the shape a future default would take; swapping the default changes the output bytes of every existing caller and is therefore a major-version change. It is deferred to v2.0 under the SemVer policy rather than shipped as a minor, and until then sentinel is reachable only by opting in with `tokenFormat: 'sentinel'`.
+**Why the default is still `'readable'`.** Sentinel is the lower-collision form, so it is the shape a future default would take; swapping the default changes the output bytes of every existing caller, which the rule above makes a major-version change. It is deferred to v2.0 under the SemVer policy rather than shipped as a minor, and until then sentinel is reachable only by opting in with `tokenFormat: 'sentinel'`.
 
-Rejected alternatives: a per-call UUID sentinel (breaks determinism and prompt caching for no gain — real text does not contain `<<REDACTED_X>>`); consumer-supplied token strings (they could themselves match a pattern and would need runtime validation); swapping the default to sentinel (a breaking change).
+Rejected alternatives: a per-call UUID sentinel (breaks determinism and prompt caching for no gain — real text does not contain `<<REDACTED_X>>`); consumer-supplied token strings (they could themselves match a pattern and would need runtime validation). Swapping the default to sentinel is not a rejected alternative — it is the deferred decision stated above.
 
 Pinned by `token-format.test.ts`, `national-id-patterns.test.ts` (`TOKEN_FORMATS — nationalId kind added to both formats`) and `person-token-idempotency.test.ts`.
 
@@ -158,6 +158,8 @@ The static ReDoS gate (`recheck` + `eslint-plugin-redos`, S5) is the primary def
 ## 4. Review-finding index
 
 IDs come from the compliance review (R), the security review (S), the tech review (T), the SD-002 reviews of individual PRs (IMP, MIN, CRIT, C, I) and the compliance-officer conditions on the NER release (C1–C7). "Test" names the test title, or the suite when the finding is a whole feature.
+
+**How this table is maintained** (founder rulings, 2026-09-08). The `Finding` column is maintained prose, not immutable history: it always describes the system as it is today, and its wording is corrected whenever reality moves — git holds every earlier wording with its date and author, so the audit trail is version control, never an append-only tail inside this file. The table carries no release column, and this record's own prose attributes no finding to a release: finding-to-release attribution is not owned in prose at all, and the repository's version tags are the answer to it. Quoted test titles are the one exception, and only because they are verbatim identifiers of code — `redacts native EU phone formats — R2 resolved in v1.1` and `sanitizePii — DOB redaction (C1: new in v1.0.0, per compliance review §R4)` are reproduced exactly as those tests are named.
 
 | ID | Finding | Where implemented | Test that pins it |
 |---|---|---|---|
@@ -251,4 +253,6 @@ The set of review-finding IDs in `src/**` comments before the comment sweep, obt
 grep -rn -o -E "\b(CRIT|MIN|IMP|C|R|S|T|I)-?[0-9]{1,2}[a-b]?\b(-residual)?" src/ | sed -E 's/^[^:]+:[0-9]+://' | sort -u
 ```
 
-is `C1 C2 C3 C4 C6 C7 CRIT-2 I1a I1b I2 IMP-1 MIN-1 MIN-2 R1 R2 R3 R4 R5 R7 R8 R10 R10-residual S1 S2 S3 S5 S11 T4 T5`. Every one of them appears in section 4 or 5 of this record. `R11`, `R11-residual`, `S12`, `R1-residual`, `R2-residual` and `R3-residual` are indexed here from `README.md` § Known Limitations and § Security Posture and did not occur as tokens in source comments.
+is `C1 C2 C3 C4 C6 C7 CRIT-2 I1a I1b I2 IMP-1 MIN-1 MIN-2 R1 R2 R3 R4 R5 R7 R8 R10 R10-residual S1 S2 S3 S5 S11 T4 T5`. Every one of them appears in section 4 or 5 of this record.
+
+Six further IDs are indexed here without having occurred as tokens in source comments. `R11`, `R11-residual`, `R1-residual`, `R2-residual` and `R3-residual` were carried in the `README.md` § Known Limitations table, which this record replaced and which no longer exists; they are now held in sections 4 and 5 above, which are the authority for them. `S12` was and still is carried in `README.md` § Security Posture, and is indexed at section 4.

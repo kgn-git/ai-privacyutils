@@ -43,6 +43,24 @@ ABSENT  R99
 
 **No `Finding` column entry was edited** — proven structurally, not promised: the record commits are `15 insertions, 0 deletions` and `1 insertion, 0 deletions`. Art. 87 and v2.0 went into § 3 rationale subsections rather than their § 4 rows *because* that column is frozen; the pending ruling may want that revisited.
 
+## Round 1 fix — the `Planned` column, then every column
+
+Round 1 was **FIX FIRST** on one Important: the question asked of `Severity` was never asked of the sibling `Planned` column. Fixed additively — one paragraph at the end of § 5 recording R2-residual's `phoneByLocale` extension, and R10 / R10-residual's DE Steuer-ID and Rentenversicherungsnummer, FR NIR Corsica conversion and IT Codice Fiscale omocodia, as **deferred commitments on consumer demand, not accepted residuals**. The lapsed `v1.2` targets are deliberately not restated: v1.3.0 shipped with none of them, so the trigger is recorded and the date is not. No existing text edited — the deletion count on the record against `6cdc1e3` is still **1**, the `--- a/` diff header.
+
+**The generalisable lesson: the deleted table had five columns, so ask all five.** Section bounds derived from the headings (§§ 4–5 = lines 158..236 before the fix), not hard-coded.
+
+| Column | Carried? | Evidence |
+|---|---|---|
+| `Ref` | yes, 13 / 13 | word-boundary count over §§ 4–5 with the hyphen excluded from the boundary class, so `R1` cannot match inside `R1-residual`: all 13 present (2–4 hits each); control `R99` → **0** by the same method |
+| `Gap` | yes, 13 / 13 | the 8 resolved rows' gap statements *are* the § 4 `Finding` cells (R1 "Non-English postal addresses passed through" … R11 "Every date shape redacted on CV text destroys employment dates"); the 5 residual rows forward explicitly — **5 of 5** § 4 residual rows read `see section 5` — and § 5 carries each gap in full |
+| `Severity` | yes, 13 / 13 | the § 5 severity paragraph, extracted mechanically from the table at `6cdc1e3`, `medium-low` for R10 included |
+| `v1.1 status` | 12 / 13 | 4 land exactly in the § 5 `Status` cells (R1-residual `not mitigated`, R10-residual `documented gaps`, R11-residual `field-aware API is the follow-up`, R3-residual carrying the stronger `ML engine upgrade behind NerEngine (C7)`); the 8 resolved rows carry more than a status word — § 4 names the implementation and the pinning test for each. **The 13th is R2-residual**: `Not mitigated` at the parent, `by design` now — the Important, fixed above |
+| `Planned` | 3 lost → fixed | `consumer demand \| additional countries \| planned \| roadmap` → **0** across the record; control `Corsica \| omocodia \| Steuer` → **2**, so the grep fires |
+
+**One residue, listed not fixed.** The release attribution the `v1.1 status` column carried (`v1.1`, `Partially resolved (v1.2)`, `Addressed (v1.3, opt-in)`) is on no surface: `v1\.1|v1\.2|v1\.3` returns **1** hit in the whole record, and it is inside a test title. There is **no `CHANGELOG.md`** in the repo, so nothing owns it. Not fixed here — the record states current state, and writing version numbers into the compliance authority is the hazard the fix above was told to avoid. → close batch.
+
+**Minors.** *Folded:* #4 — `README.md:265` said "direction (recall or precision)" where 4 of the 15 § 5 rows carry `scope` or `control gap`, and listed "R / S / T / IMP / C" where `MIN`, `CRIT` and `I` also appear; both corrected, in README text this PR authored. *To the close batch:* #2 and #3 (both blocked on the `Finding`-column ruling), #5 (the record leg of the `ner-cohort-benchmark.test.ts:3` pointer — ADR 004 is named first and does resolve), #6 (reviewer recommends explicitly **not** rebasing), #7 (the word cap — the excess is evidence), #8 (the bundle sub-section was authorised on the issue body).
+
 ## Gates
 
 `npx vitest run` → `Tests 408 passed (408)`, `Test Files 2 failed | 17 passed (19)` — count **identical to the PR-4 baseline**; the two failures are the pre-existing #79 `scripts/__tests__` load errors, zero tests, same on `main`. `npm run lint` clean · `lint:ratio` `0 of 36 over the line at HEAD, 0 of 36 at base 6cdc1e3 — pass` · `npm run build` clean.
@@ -56,7 +74,7 @@ CI, anchored to commits rather than to a moment — polled with `gh run list --c
 
 ## Where brief and body read differently
 
-The body deletes `README.md:285` (the performance paragraph); the brief says **keep** it under its own sub-heading — and the body later keeps the bundle note "beside the perf paragraph", so it is self-inconsistent. Resolution satisfying both without duplicating authority: the paragraph leaves the limitations material for a sub-heading of its own, keeps only the operational half, and **cites § 4.1 for the thresholds instead of restating them**. A judgement, not a derivation.
+The body deletes `README.md:285`; the brief says **keep** it under its own sub-heading, and the body then keeps the bundle note beside it — self-inconsistent. Resolution: the paragraph gets its own sub-heading, keeps only the operational half, and **cites § 4.1 for the thresholds instead of restating them**. A judgement, not a derivation.
 
 ## Deliberately not done
 
@@ -75,18 +93,18 @@ Gates green on branch · TDD N/A, documentation-only — the sole `src/` change 
 
 ## Sceptic self-critique
 
-**"A grep finding nothing is not evidence."** Every negative carries a positive control on the same alternation, run *before* the sentence was written. All fired.
+**"A grep finding nothing is not evidence."** Every negative carries a positive control on the same alternation, run *before* the sentence was written. All fired, in both rounds.
 
 **"(b) isn't really absent — `:182` says 'alongside the regex-only one'."** Partly conceded, the weakest of the three: `:182` establishes the measurement exists but never names its file, so a reader of the record alone cannot find it. Stated as nuance, not a clean absence.
 
-**"You exceeded the brief's scope."** Conceded and defended — two census hits and the caller-side-scrubbing fact were missing from lists presented as verified. Leaving a live pointer aimed at a table I had just deleted was the larger error.
+**"You exceeded the brief's scope."** Conceded and defended: two census hits and the caller-side-scrubbing fact were missing from lists presented as verified, and leaving a live pointer at a table I had just deleted was the larger error.
 
-**"Is 'every green CI run postdates the removal' measured?"** Yes — `gh run list --workflow CI --limit 100` returns exactly four `success` runs, all 2026-09-08, all after the removal. I did not repeat the retracted "red since 2026-04-28" claim nor assert why pre-04-28 runs failed (logs expired). Correction: the earliest green is `34187484246` @ `8811cd3`, not `34189568534` @ `7e53416` as the body states — both on the PR-4 branch, so the substance holds.
+**"Is 'every green CI run postdates the removal' measured?"** Yes — `gh run list --workflow CI --limit 100` returns only `success` runs dated 2026-09-08, all after the removal; the retracted "red since 2026-04-28" claim is not repeated. Correction: the earliest green is `34187484246` @ `8811cd3`, not `34189568534` @ `7e53416` as the body states — both on the PR-4 branch, so the substance holds.
 
-**Word cap.** This file is over the 1,000-word brief cap (figure in the report). Every remaining section is a control the brief names as binding; I cut prose, not evidence, and flag the overage rather than dropping a control to meet it.
+**Word cap.** Over the 1,000-word cap. Every section is a control the brief names as binding, each with its counts and its firing control; I cut prose across two rounds and flag the overage rather than drop a control to meet it.
 
-**"You verified the three facts you were handed and nearly deleted a column nobody listed."** Conceded, and the sharpest objection here. The ID-set AC checks *tokens*, the four-fact list checks *sentences*; the table's Severity column is neither, so every stated control would have passed green while twelve ratings vanished. Caught only by asking what each deleted **column** carried, not each deleted row — the same question that found the caller-side-scrubbing fact.
+**"You verified the three facts you were handed and nearly deleted a column nobody listed."** Conceded, and the sharpest objection. The ID-set AC checks *tokens*, the four-fact list checks *sentences*; a table column is neither, so every stated control would have gone green while twelve ratings vanished. **And I then stopped at one column** — the reviewer found `Planned` by asking the question systematically. The enumeration above is the correction.
 
 ## Code Review
 
-- Verdict / Critical / Important / Minor / Fix commits: *pending dispatcher review*
+- **Round 1 verdict: FIX FIRST.** Critical 0 · Important 1 (`Planned` column forward commitments lost) · Minor 7. Fix: the § 5 planned-extensions paragraph plus Minor 4, this section, and the CI evidence below.

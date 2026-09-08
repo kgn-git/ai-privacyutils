@@ -262,7 +262,7 @@ Tests pin the ordering with adversarial fixtures (`src/__tests__/sanitize-pii.te
 
 ## Known Limitations (C2 per compliance review)
 
-What this library deliberately or currently does not catch is recorded in [`docs/compliance/redaction-record.md`](docs/compliance/redaction-record.md), which is the single authority for it. Read **§ 5 Known limitations** for the residual gaps themselves, each with its direction (recall or precision) and status; **§ 4 Review-finding index** for the R / S / T / IMP / C identifier behind each one, where it is implemented and the test that pins it; and **§ 3 Design rationale** for why each pattern has the shape it has. This section is a pointer to that record, not a second copy of it.
+What this library deliberately or currently does not catch is recorded in [`docs/compliance/redaction-record.md`](docs/compliance/redaction-record.md), which is the single authority for it. Read **§ 5 Known limitations** for the residual gaps themselves, each with its direction (recall, precision, scope or control gap) and status; **§ 4 Review-finding index** for the review identifier behind each one (R / S / T / IMP / MIN / CRIT / C / I), where it is implemented and the test that pins it; and **§ 3 Design rationale** for why each pattern has the shape it has. This section is a pointer to that record, not a second copy of it.
 
 ### Performance — measured and reported, not enforced
 

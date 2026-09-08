@@ -342,8 +342,29 @@ describe('piiMiddleware.transformParams end-to-end — measured throughput (repo
       topP: 0.9,
     });
 
-    // The redactable text matches the regex-only benchmark's ~10 KB so the two numbers are comparable.
-    const totalRedactableBytes = partText.length * 3;
+    // Derived from the object `buildParams()` actually builds, never restated as arithmetic: the walk sums the
+    // text parts `redactPart` redacts, so dropping or resizing one moves this number and the range below goes
+    // red. The total matches the regex-only measurement's ~10 KB, so the two printed figures are comparable.
+    const countRedactableChars = (params: Record<string, unknown>): number => {
+      const messages = Array.isArray(params['prompt'])
+        ? (params['prompt'] as Record<string, unknown>[])
+        : [];
+      let total = 0;
+      for (const message of messages) {
+        const content = message['content'];
+        if (!Array.isArray(content)) {
+          continue;
+        }
+        for (const part of content as Record<string, unknown>[]) {
+          const text = part['text'];
+          if (part['type'] === 'text' && typeof text === 'string') {
+            total += text.length;
+          }
+        }
+      }
+      return total;
+    };
+    const totalRedactableBytes = countRedactableChars(buildParams());
     expect(totalRedactableBytes).toBeGreaterThan(9_000);
     expect(totalRedactableBytes).toBeLessThan(12_000);
 

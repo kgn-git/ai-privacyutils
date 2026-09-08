@@ -6,9 +6,11 @@ Branch `docs/73-pr5-record-is-authority` · base `main` @ `6cdc1e3` · record = 
 
 ## Commit provenance
 
-**The complete list, oldest first** — `git log --oneline --reverse 6cdc1e34..HEAD`, all ten commits, none elided:
+⚠️ **`git log --oneline --reverse 6cdc1e34..HEAD` is the authority; the list below is a convenience copy** and, like any second representation, goes stale by one on every commit that edits it — which is exactly how the round-3 defect got in. Read it as *complete through the commit that last touched this line*, never as *complete at head*. Oldest first:
 
-`b2c1b52` § 4.1 + § 3.7 + § 3.9 · `5bbdda3` § 5 caller-side row · `6d96d61` README becomes a pointer, six consumers repointed · `2ce37cb` handover · `5b5f069` § 5 severity ratings · `58e40ee` CI runs and the short-SHA trap · `cec0ad3` § 5 planned extensions · `55563d3` five-column enumeration · `31592c5` § 5 count corrected to seven of thirteen · `0e2c135` residue narrowed to R5, corpora named, handover split.
+`b2c1b52` § 4.1 + § 3.7 + § 3.9 · `5bbdda3` § 5 caller-side row · `6d96d61` README becomes a pointer, six consumers repointed · `2ce37cb` handover · `5b5f069` § 5 severity ratings · `58e40ee` CI runs and the short-SHA trap · `cec0ad3` § 5 planned extensions · `55563d3` five-column enumeration · `31592c5` § 5 count corrected to seven of thirteen · `0e2c135` residue narrowed to R5, corpora named, handover split · `e5a597b` provenance disjunction restored, list completed, four Minors folded · `8e72e5f` the CI table's one-row-behind rule.
+
+Nothing here is elided: `58e40ee`, `31592c5` and `0e2c135` were the three the round-2 split dropped, and `31592c5` matters most — see the commit-level paragraph below.
 
 **Against the base, the record is purely additive.** `git diff --numstat 6cdc1e34..HEAD -- docs/compliance/redaction-record.md` → **`20  0`**: twenty insertions, **zero deletions**. Nothing that existed in the record at `6cdc1e34` was removed or rewritten in any commit of this PR.
 

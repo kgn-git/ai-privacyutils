@@ -232,6 +232,8 @@ What the library deliberately or currently does not catch. Each is a precision o
 | Caller-side scrubbing | Structured addresses, postcodes and phones for the six EU locales are covered in-package (R1, R2), so a consumer no longer needs caller-level scrubbing for those classes. Caller-side pre- and post-LLM scrubbing remains a sensible defence-in-depth complement to the middleware, and is the only cover for everything else in this section | scope | by design |
 | Logging | The no-logging clause has no executable control (section 1) | control gap | epic residual |
 
+**Severity, as rated by the compliance review.** The README table this section replaced carried a severity column, reproduced here in full so the ratings are not lost with it. Still open: **R1-residual medium**, **R2-residual low**, **R3-residual low**, **R10-residual low**, **R11-residual medium**. Rated against the gap before it was closed, and now resolved or addressed (section 4 records where): **R1 high**, **R2 high**, **R11 high**, **R3 medium**, **R7 medium**, **R10 medium-low**, **R5 low**, **R8 low**.
+
 ## 6. Fixture policy
 
 - No real PII in any fixture. National-ID fixtures are synthesised from placeholder bodies (`2000000000001` for NIR — sex 2, year 00, département 00, commune 000, sequence 001; `RSSMRA85T10A562`; `12345678`) with the check value computed by the production helper, so a wrong algorithm breaks fixture and implementation together while the hand-written "wrong check" cases still assert rejection.

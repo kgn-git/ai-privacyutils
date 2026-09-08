@@ -17,7 +17,7 @@
 
 Which threshold belongs to which test came from source: at `2154652`, `locale-patterns.test.ts:455 toBeLessThan(10)`, `pii-middleware.test.ts:373 toBeLessThan(20)`.
 
-**Three further absences moved** under the body's "a moved fact is never a deleted fact" rule; of its three examples two were real, one was not. **R10 Art. 87** (`Art\. 87|Member-State` → 0) → § 3.7; **R8 v2.0** (`v2\.0` → 0) → § 3.9; **R11 overlap-suppression** is called absent but is **present** verbatim at § 5:213 — not moved. Plus my own find, on no list: **caller-side scrubbing** (`caller-level|defence.in.depth` → 0) → § 5. Verified already carried: one-way redaction, NANP fallback, ML bundle ceiling, the residual gap texts.
+**Four further absences moved** under the body's "a moved fact is never a deleted fact" rule; of its three examples two were real, one was not. **R10 Art. 87** (`Art\. 87|Member-State` → 0) → § 3.7; **R8 v2.0** (`v2\.0` → 0) → § 3.9; **R11 overlap-suppression** is called absent but is **present** verbatim at § 5:213 — not moved. Plus two of my own, on no list: **caller-side scrubbing** (`caller-level|defence.in.depth` → 0) → § 5, and the table's whole **Severity column** — only R8's "low-severity" survived anywhere in the record (1 hit; control + `precision` → 14), so the other twelve ratings were about to be lost. Reproduced in § 5, extracted from the table at `6cdc1e3` rather than recalled: my first draft grouped R10 as medium when it is **medium-low**. Verified already carried: one-way redaction, NANP fallback, ML bundle ceiling, the residual gap texts.
 
 ## Census, classified
 
@@ -47,7 +47,10 @@ ABSENT  R99
 
 `npx vitest run` → `Tests 408 passed (408)`, `Test Files 2 failed | 17 passed (19)` — count **identical to the PR-4 baseline**; the two failures are the pre-existing #79 `scripts/__tests__` load errors, zero tests, same on `main`. `npm run lint` clean · `lint:ratio` `0 of 36 over the line at HEAD, 0 of 36 at base 6cdc1e3 — pass` · `npm run build` clean.
 
-CI: *filled below on the final head.*
+CI, anchored to commits rather than to a moment — polled with `gh run list --commit`, never `gh pr checks --watch`:
+
+- `2ce37cb` — `CI` **success** ([34192490748](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192490748)) · `PR #83` **success** ([34192489606](https://github.com/kgn-git/ai-privacyutils/actions/runs/34192489606))
+- final head `HEAD_SHA` — `CI` `CI_CONC` (`CI_URL`) · `PR #83` `PR_CONC` (`PR_URL`)
 
 ## Where brief and body read differently
 
@@ -77,6 +80,8 @@ Gates green on branch · TDD N/A, documentation-only — the sole `src/` change 
 **"You exceeded the brief's scope."** Conceded and defended — two census hits and the caller-side-scrubbing fact were missing from lists presented as verified. Leaving a live pointer aimed at a table I had just deleted was the larger error.
 
 **"Is 'every green CI run postdates the removal' measured?"** Yes — `gh run list --workflow CI --limit 100` returns exactly four `success` runs, all 2026-09-08, all after the removal. I did not repeat the retracted "red since 2026-04-28" claim nor assert why pre-04-28 runs failed (logs expired). Correction: the earliest green is `34187484246` @ `8811cd3`, not `34189568534` @ `7e53416` as the body states — both on the PR-4 branch, so the substance holds.
+
+**"You verified the three facts you were handed and nearly deleted a column nobody listed."** Conceded, and the sharpest objection here. The ID-set AC checks *tokens*, the four-fact list checks *sentences*; the table's Severity column is neither, so every stated control would have passed green while twelve ratings vanished. Caught only by asking what each deleted **column** carried, not each deleted row — the same question that found the caller-side-scrubbing fact.
 
 ## Code Review
 

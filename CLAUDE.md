@@ -13,7 +13,7 @@ npm run lint:ratio    # comment-ratio ratchet against the merge base with origin
 npm run redos:scan    # recheck over every pattern factory in dist/patterns.js
 ```
 
-CI runs the same gates on every PR. `locale-patterns.test.ts` carries a wall-clock benchmark that reads host load as a failure; run that file alone before calling it a regression.
+CI runs the same gates on every PR. `locale-patterns.test.ts` and `pii-middleware.test.ts` each time a fixed ~10 KB workload and print the mean as a `[measured] …` line; the figure is reported, never asserted, so no wall-clock threshold can turn a run red on host load.
 
 ## Standards
 

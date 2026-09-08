@@ -183,11 +183,14 @@ This is acceptable under Art. 25 because the obligation sits with the data contr
 | Dimension | Target | Rationale |
 |---|---|---|
 | `sanitizePii` (sync, regex-only, `enableNer: false`) p95 | <20 ms / 10 KB | Existing v1.1 gate, unchanged |
+
 | `sanitizePiiAsync` (`enableNer: true`) p95 | <150 ms / 10 KB | Renegotiated from ADR 003's <80ms — `compromise` is a full NLP tokenizer+tagger pipeline, not a regex; tech-ops verdict 2026-04-30 confirms 55–120 ms typical on Linux Vercel |
 | Cold-start (first call after Vercel cold-start) | <500 ms | Compromise module parse ~316 ms typical; far below ADR 003's <1.2 s ML target |
 | Bundle delta | <5 MB | Confirmed: ~3.8 MB installed / 344 KB ESM |
 
 The total LLM round-trip for a CV-sized prompt is 800–3000 ms. 55–150 ms of NER overhead is 2–18% of LLM round-trip — noticeable in p50 only.
+
+**Amendment 2026-09-07 (#73 PR-4) — the sync row is no longer a gate.** The `sanitizePii` wall-clock figure is now measured and printed by `src/__tests__/locale-patterns.test.ts`, not asserted; the corresponding middleware measurement in `src/__tests__/pii-middleware.test.ts` is likewise reported only. On a shared runner a wall-clock threshold reports host load rather than the code, so the assertions were removed. The other rows in this table were never test-enforced in this repo. See README § Known Limitations and `docs/compliance/redaction-record.md` § 4 (IMP-1).
 
 ## Cohort fairness — re-scoped AC for v1.2
 

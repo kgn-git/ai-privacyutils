@@ -147,7 +147,7 @@ The cohort-1 (Western European) gate is enforced as CI BLOCKING; cohorts 2–4 +
 
 ### CV redaction profile (issue #64)
 
-Before the `profile` option existed, a single, one-size-fits-all policy **over-redacted on CV / résumé text**: (a) every date-shaped string is redacted to `[dob]` — destroying employment start/end dates — and (b) surname-shaped employer names (`Morgan Stanley`, `Ericsson`) are mis-tagged as persons and redacted to `[person]`. Employment dates, employer/organisation names and city/region are the highest-signal **non-personal** features a downstream embedding / job-match consumer depends on (see `jobflow-platform#1424`).
+A single, one-size-fits-all policy **over-redacts on CV / résumé text**: (a) every date-shaped string is redacted to `[dob]` — destroying employment start/end dates — and (b) surname-shaped employer names (`Morgan Stanley`, `Ericsson`) are mis-tagged as persons and redacted to `[person]`. Employment dates, employer/organisation names and city/region are the highest-signal **non-personal** features a downstream embedding / job-match consumer depends on (see `jobflow-platform#1424`).
 
 The `profile` option is additive. The `'default'` profile is **byte-identical to the behaviour before profiles existed** on every input, so existing consumers are unaffected. Opt into `'cv'` for CV/embedding text:
 

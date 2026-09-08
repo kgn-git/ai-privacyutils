@@ -229,6 +229,7 @@ What the library deliberately or currently does not catch. Each is a precision o
 | Email | Greedy Unicode TLD consumption over-redacts email-shaped tokens (`user@example.中国后文字`) | precision (safe) | by design |
 | Middleware | Request-side only: `wrapGenerate` / `wrapStream` are not implemented, so model responses are not scrubbed by this library | scope | consumer-side post-LLM scrubbing |
 | Cap | The input-length cap is per text part, not summed over a prompt; two 400 KB parts pass a 500 K cap | scope | by design (ADR 002) |
+| Caller-side scrubbing | Structured addresses, postcodes and phones for the six EU locales are covered in-package (R1, R2), so a consumer no longer needs caller-level scrubbing for those classes. Caller-side pre- and post-LLM scrubbing remains a sensible defence-in-depth complement to the middleware, and is the only cover for everything else in this section | scope | by design |
 | Logging | The no-logging clause has no executable control (section 1) | control gap | epic residual |
 
 ## 6. Fixture policy

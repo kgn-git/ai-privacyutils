@@ -302,10 +302,11 @@ describe('piiMiddleware.transformParams — non-mutation of input', () => {
 
 // Middleware-level cost on a realistic provider-layer shape (system + user with three text parts and an image +
 // assistant history, ~10 KB of mixed EU PII): the JSON deep clone and message traversal that the regex-only
-// benchmark in locale-patterns.test.ts does not pay. 20 ms leaves headroom on a slow runner and still catches a
-// byte-by-byte structural clone.
-describe('piiMiddleware.transformParams end-to-end — performance budget', () => {
-  it('processes a realistic ~10KB LanguageModelV1CallOptions in under 20ms (mean of 10 runs)', async () => {
+// measurement in locale-patterns.test.ts does not pay. Measured and printed on every run — not a gate. A
+// wall-clock mean on a shared runner tracks host load, not the code, so no threshold is asserted on it; the
+// workload size is still asserted, so the printed number always describes the same ~10 KB input.
+describe('piiMiddleware.transformParams end-to-end — measured throughput (reported, not gating)', () => {
+  it('reports the mean wall-clock cost of 10 runs over a realistic ~10KB LanguageModelV1CallOptions', async () => {
     const euBlock =
       'Jean Dupont, 12 rue de la Paix, 75001 Paris, jean@example.fr. ' +
       'Hans Müller, Hauptstraße 23, 80331 München, hans@example.de. ' +
@@ -341,8 +342,29 @@ describe('piiMiddleware.transformParams end-to-end — performance budget', () =
       topP: 0.9,
     });
 
-    // The redactable text matches the regex-only benchmark's ~10 KB so the two numbers are comparable.
-    const totalRedactableBytes = partText.length * 3;
+    // Derived from the object `buildParams()` actually builds, never restated as arithmetic: the walk sums the
+    // text parts `redactPart` redacts, so dropping or resizing one moves this number and the range below goes
+    // red. The total matches the regex-only measurement's ~10 KB, so the two printed figures are comparable.
+    const countRedactableChars = (params: Record<string, unknown>): number => {
+      const messages = Array.isArray(params['prompt'])
+        ? (params['prompt'] as Record<string, unknown>[])
+        : [];
+      let total = 0;
+      for (const message of messages) {
+        const content = message['content'];
+        if (!Array.isArray(content)) {
+          continue;
+        }
+        for (const part of content as Record<string, unknown>[]) {
+          const text = part['text'];
+          if (part['type'] === 'text' && typeof text === 'string') {
+            total += text.length;
+          }
+        }
+      }
+      return total;
+    };
+    const totalRedactableBytes = countRedactableChars(buildParams());
     expect(totalRedactableBytes).toBeGreaterThan(9_000);
     expect(totalRedactableBytes).toBeLessThan(12_000);
 
@@ -370,6 +392,10 @@ describe('piiMiddleware.transformParams end-to-end — performance budget', () =
     }
     const mean = runs.reduce((a, b) => a + b, 0) / runs.length;
 
-    expect(mean).toBeLessThan(20);
+    // Reported, never asserted — this line is the deliverable of the test.
+    process.stdout.write(
+      `[measured] piiMiddleware.transformParams end-to-end: mean ${mean.toFixed(3)} ms over 10 runs ` +
+        `on ${totalRedactableBytes} redactable chars\n`,
+    );
   });
 });

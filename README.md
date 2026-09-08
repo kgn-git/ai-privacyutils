@@ -1,8 +1,8 @@
 # `@kgn-git/privacy-utils`
 
-A standalone TypeScript PII-redaction library for LLM prompts. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. v1.1 adds opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`). **v1.2 adds opt-in PERSON-name redaction** (`sanitizePiiAsync({ enableNer: true })`) via a heuristic NER engine (`compromise` v14) behind a pluggable `NerEngine` abstraction — closing the largest residual GDPR Art. 5(1)(c) gap on the LLM prompt path (R3, partial — see [`docs/compliance/redaction-record.md`](docs/compliance/redaction-record.md) § 5, R3-residual). **v1.3 adds the additive `profile: 'cv'` option** (`sanitizePii(text, { profile: 'cv' })`) that preserves employment dates for CV/embedding callers — redacting a date only on an explicit DOB cue — while still masking true PII; the default profile stays byte-identical (R11 — see § CV redaction profile).
+A standalone TypeScript PII-redaction library for LLM prompts. Provides pure `sanitizePii`, composable `piiPatterns`, a Vercel AI SDK middleware (`piiMiddleware`), and a middleware factory (`createPiiMiddleware`) that scrubs PII from LLM prompts at the single latest application-layer chokepoint before the SDK serialises the provider HTTP call. It offers opt-in low-collision sentinel tokens (`tokenFormat: 'sentinel'` → `<<REDACTED_X>>`); **opt-in PERSON-name redaction** (`sanitizePiiAsync({ enableNer: true })`) via a heuristic NER engine (`compromise` v14) behind a pluggable `NerEngine` abstraction, which closes the largest residual GDPR Art. 5(1)(c) gap on the LLM prompt path (R3, partial — see [`docs/compliance/redaction-record.md`](docs/compliance/redaction-record.md) § 5, R3-residual); and **the additive `profile: 'cv'` option** (`sanitizePii(text, { profile: 'cv' })`) that preserves employment dates for CV/embedding callers — redacting a date only on an explicit DOB cue — while still masking true PII, with the default profile byte-identical (R11 — see § CV redaction profile).
 
-v1.0.0 was the first release; it provides PII redaction on the LLM prompt path as a GDPR Art. 5(1)(c) / 25 / 32 data-minimisation control.
+The library provides PII redaction on the LLM prompt path as a GDPR Art. 5(1)(c) / 25 / 32 data-minimisation control. Which release introduced which capability is answered by the repository's version tags, not by this file.
 
 ## Installation
 
@@ -65,7 +65,7 @@ const cleaned = sanitizePii(rawCvText);
 // "Jane Doe, [email], [phone], [address]"
 ```
 
-### Opt-in sentinel tokens (v1.1 — issue #9 / compliance §R8)
+### Opt-in sentinel tokens (issue #9 / compliance §R8)
 
 By default the redaction tokens are the readable `[email]`, `[phone]`, `[address]`, `[postcode]`, `[dob]` (v1.0.0 byte-identical). These are convenient for debug but collide with user-authored literals — a user writing `"enquiries via the [email] form"` has indistinguishable output from a genuine `[email]` redaction. Opt into the low-collision sentinel form with the `tokenFormat` option:
 
@@ -93,11 +93,11 @@ Sentinel mapping (all 5 token kinds covered):
 
 **Backward-compat contract.** `sanitizePii(text)` with no options — and `piiMiddleware` — produce v1.0.0 byte-identical output. `createPiiMiddleware()` with no options is equivalent to the default `piiMiddleware`. The default swap to sentinel is deferred to v2.0 (major bump).
 
-**Idempotency invariant.** The sentinel strings (`<<REDACTED_*>>`) are structurally pattern-disjoint from every v1.x redaction pattern — no `@`, no digits, no `\b\d` prefix, no lowercase street-type keyword, no closed-set prefix keyword. Running `sanitizePii` twice in either format is a strict no-op; sentinel output sanitised again in readable mode is also a no-op. The ADR + invariant proof lives in `src/token-format.ts`. v1.2 (issue #42) extends the invariant to `[person]` / `<<REDACTED_PERSON>>` — see § Async API + NER name redaction below.
+**Idempotency invariant.** The sentinel strings (`<<REDACTED_*>>`) are structurally pattern-disjoint from every v1.x redaction pattern — no `@`, no digits, no `\b\d` prefix, no lowercase street-type keyword, no closed-set prefix keyword. Running `sanitizePii` twice in either format is a strict no-op; sentinel output sanitised again in readable mode is also a no-op. The ADR + invariant proof lives in `src/token-format.ts`. The invariant extends to `[person]` / `<<REDACTED_PERSON>>` (issue #42) — see § Async API + NER name redaction below.
 
-### Async API + NER name redaction (v1.2 — issue #42 / R3)
+### Async API + NER name redaction (issue #42 / R3)
 
-v1.2 adds an async export `sanitizePiiAsync` that applies the v1.1 regex pipeline + (optional) PERSON-name redaction via a heuristic NER engine (`compromise` v14). The sync `sanitizePii` is unchanged — existing v1.0/v1.1 consumers see no behavioural change at the v1.2 minor bump.
+The async export `sanitizePiiAsync` applies the regex pipeline + (optional) PERSON-name redaction via a heuristic NER engine (`compromise` v14). The sync `sanitizePii` is unchanged by it — existing consumers of the sync surface see no behavioural change.
 
 **Setting `enableNer: false` (default) means names are NOT redacted. Enable for GDPR Art. 25 compliance when sending text to third-party LLM processors.**
 
@@ -114,22 +114,22 @@ await sanitizePiiAsync(rawCv, { enableNer: true, tokenFormat: 'sentinel' });
 // → "Hi, <<REDACTED_PERSON>> applied. Email <<REDACTED_EMAIL>>."
 ```
 
-> **Note — middleware NER integration is a v1.3 follow-on.** Calling
+> **Note — middleware NER integration is not wired.** Calling
 > `sanitizePiiAsync` from `createPiiMiddleware`'s `transformParams` (so
 > `createPiiMiddleware({ enableNer: true })` would route prompts through
-> the NER engine before the SDK emits them) is **not** wired in v1.2 —
+> the NER engine before the SDK emits them) does **not** happen —
 > `PiiMiddlewareOptions` does not accept `enableNer` and the middleware
-> never invokes NER. For v1.2, use `sanitizePiiAsync` directly when NER
-> is required.
+> never invokes NER. Use `sanitizePiiAsync` directly when NER is
+> required.
 
-**Why opt-in (`enableNer: false` default)?** v1.2 is a non-breaking minor bump; existing consumers must continue to see byte-identical behaviour. Platform integration (enabling NER for the consumer-side `sanitizePii` call path) is tracked as a near-term backlog deliverable.
+**Why opt-in (`enableNer: false` default)?** NER arrived as a non-breaking additive option; existing consumers must continue to see byte-identical behaviour. Platform integration (enabling NER for the consumer-side `sanitizePii` call path) is tracked as a near-term backlog deliverable.
 
-**Engine: `compromise` v14 (heuristic, not ML).** v1.2 uses pure-JS heuristic NER. Two ML engines (transformers.js + distilbert q8 ~221 MB; transformers.js + GLiNER-PII q8 ~333 MB) were evaluated and rejected as exceeding the Vercel 250 MB function-bundle ceiling. `compromise` is ~3.8 MB installed / ~344 KB ESM, zero native bindings, 13-year provenance, 0 known CVEs. The full evaluation history lives in `docs/adr/004-ner-engine-compromise.md`.
+**Engine: `compromise` v14 (heuristic, not ML).** The library uses pure-JS heuristic NER. Two ML engines (transformers.js + distilbert q8 ~221 MB; transformers.js + GLiNER-PII q8 ~333 MB) were evaluated and rejected as exceeding the Vercel 250 MB function-bundle ceiling. `compromise` is ~3.8 MB installed / ~344 KB ESM, zero native bindings, 13-year provenance, 0 known CVEs. The full evaluation history lives in `docs/adr/004-ner-engine-compromise.md`.
 
-**Pluggable engine architecture.** v1.2 ships behind a `NerEngine` abstraction so future engine upgrades (HTTP sidecar, cloud NER, alternative pure-JS engines) are drop-in replacements requiring zero consumer API changes. The ML upgrade is tracked as a formal roadmap commitment — see [`docs/compliance/redaction-record.md`](docs/compliance/redaction-record.md) § 5 (R3-residual) and § 4 (C7), and ADR 004.
+**Pluggable engine architecture.** NER ships behind a `NerEngine` abstraction so future engine upgrades (HTTP sidecar, cloud NER, alternative pure-JS engines) are drop-in replacements requiring zero consumer API changes. The ML upgrade is tracked as a formal roadmap commitment — see [`docs/compliance/redaction-record.md`](docs/compliance/redaction-record.md) § 5 (R3-residual) and § 4 (C7), and ADR 004.
 
 **Vercel runtime compatibility.**
-- `sanitizePii` (sync, regex-only, the v1.0/v1.1 surface) → Edge-runtime SAFE (no `compromise` in the bundle graph).
+- `sanitizePii` (sync, regex-only) → Edge-runtime SAFE (no `compromise` in the bundle graph).
 - `sanitizePiiAsync` with `enableNer: false` → Edge-runtime SAFE (`compromise` is reached only through the dynamic `import('compromise')` that `CompromiseNerEngine` starts in its constructor, and with `enableNer: false` no engine is constructed).
 - `sanitizePiiAsync` with `enableNer: true` → Vercel **Serverless** (Node 20+) only. The 344 KB ESM exceeds the 1 MB Edge practical limit when chained with other modules.
 
@@ -143,13 +143,13 @@ await sanitizePiiAsync(rawCv, { enableNer: true, tokenFormat: 'sentinel' });
 | 4. Slavic transliterated (Dmitri Volkov, Jana Novák, …) | 6 | **100.0%** (6/6) | benchmark only |
 | FP rate (companies, universities, tech terms, job titles) | 22 | **4.5%** (1/22) — `IBM Watson` → `Watson` | benchmark only |
 
-The cohort-1 (Western European) gate is enforced as CI BLOCKING; cohorts 2–4 + FP are benchmark + report only at v1.2. The original ≥95% per-cohort / ≤5pp variance AC is carried forward to the ML-upgrade backlog issue (compliance condition C7).
+The cohort-1 (Western European) gate is enforced as CI BLOCKING; cohorts 2–4 + FP are benchmark + report only. The original ≥95% per-cohort / ≤5pp variance AC is carried forward to the ML-upgrade backlog issue (compliance condition C7).
 
-### CV redaction profile (v1.3 — issue #64)
+### CV redaction profile (issue #64)
 
-v1.0–v1.2 shipped a single, one-size-fits-all policy that **over-redacts on CV / résumé text**: (a) every date-shaped string is redacted to `[dob]` — destroying employment start/end dates — and (b) surname-shaped employer names (`Morgan Stanley`, `Ericsson`) are mis-tagged as persons and redacted to `[person]`. Employment dates, employer/organisation names and city/region are the highest-signal **non-personal** features a downstream embedding / job-match consumer depends on (see `jobflow-platform#1424`).
+Before the `profile` option existed, a single, one-size-fits-all policy **over-redacted on CV / résumé text**: (a) every date-shaped string is redacted to `[dob]` — destroying employment start/end dates — and (b) surname-shaped employer names (`Morgan Stanley`, `Ericsson`) are mis-tagged as persons and redacted to `[person]`. Employment dates, employer/organisation names and city/region are the highest-signal **non-personal** features a downstream embedding / job-match consumer depends on (see `jobflow-platform#1424`).
 
-v1.3 adds an additive `profile` option. The `'default'` profile is **byte-identical to v1.2** on every input (this is a SemVer MINOR bump — existing consumers are unaffected). Opt into `'cv'` for CV/embedding text:
+The `profile` option is additive. The `'default'` profile is **byte-identical to the behaviour before profiles existed** on every input, so existing consumers are unaffected. Opt into `'cv'` for CV/embedding text:
 
 ```ts
 import { sanitizePii, sanitizePiiAsync } from '@kgn-git/privacy-utils';
@@ -197,7 +197,7 @@ This library provides a formalised Art. 5(1)(c) data-minimisation control for LL
 
 - **Art. 5(1)(c) — data minimisation.** LLM operations on free-text user input (skill extraction, cover-letter generation, gap analysis, CV tailoring, embeddings, translation) are content-shape transformations. None require the user's email, phone, postal address, or DOB as input signal. Redacting those classes before emission is the textbook minimisation measure.
 - **Art. 25 — privacy by design and by default.** The middleware placement at `transformParams` is the single latest application-layer intercept — every SDK-based LLM call passes through automatically once the middleware is registered on the model. Running later (provider-SDK patch) cedes control; running earlier (per-caller) fragments enforcement. Privacy-by-default (Art. 25(2)) holds because redaction is on as soon as the middleware is registered; opting out requires an explicit code change.
-- **Art. 32 — security of processing.** Regex redaction is an appropriate technical measure at the v1.0.0 maturity level given a typical risk profile (B2C advisory feedback, contracted LLM processor). Pattern audit history is maintained in this repo's commit + handover docs.
+- **Art. 32 — security of processing.** Regex redaction is an appropriate technical measure given a typical risk profile (B2C advisory feedback, contracted LLM processor). Pattern audit history is maintained in this repo's commit + handover docs.
 
 This package does not create a new Art. 13 disclosure obligation. Consumer-side privacy notices should nonetheless note that PII redaction is applied before third-party LLM processing (it is both accurate and claims the minimisation credit).
 
@@ -238,7 +238,7 @@ See GDPR Rationale above for the *compliance basis* behind these choices (Art. 4
 | `piiPatterns.phoneByLocale.it()` | Italian phone validator. Matches mobile `320 1234567` 3+7, Rome landline `+39 06 12345678`, international prefixes. | `[phone]` |
 | `piiPatterns.phoneByLocale.es()` | Spanish phone validator. Matches mobile `612 34 56 78` 3+2+2+2, Madrid landline `+34 91 123 45 67`, international prefixes. | `[phone]` |
 | `piiPatterns.phoneByLocale.pt()` | Portuguese phone validator. Matches mobile `912 345 678` 3+3+3, Lisbon landline `+351 21 123 4567`, international prefixes. | `[phone]` |
-| `piiPatterns.phoneInternational()` | `+?CC-3-3-4` NANP-shape (retained v1.0.0 fallback for numbers outside the six EU locales above) | `[phone]` |
+| `piiPatterns.phoneInternational()` | `+?CC-3-3-4` NANP-shape (retained fallback for numbers outside the six EU locales above) | `[phone]` |
 | `piiPatterns.phoneDomestic()` | `3-3-4` NANP-shape fallback | `[phone]` |
 | `piiPatterns.dob()` | Numeric `DD.MM.YYYY` / `DD/MM/YYYY` / `DD-MM-YYYY` / `YYYY-MM-DD` + named-month EN/FR/DE/IT/ES/PT | `[dob]` |
 | `piiPatterns.nationalIdByLocale.uk()` | UK NINO validator (regex-only — HMRC invalid-prefix rules + suffix `[A-D]`). Accepts compact `AB123456C` and space-separated `AB 12 34 56 C` forms. | `[nationalId]` |
@@ -249,13 +249,13 @@ See GDPR Rationale above for the *compliance basis* behind these choices (Art. 4
 
 Note: unlike the other pattern factories (which return `RegExp`), the `phoneByLocale.*()` factories return a **validator function** `(candidate: string) => boolean` backed by `libphonenumber-js` directly. API-choice rationale is documented inline in `src/patterns.ts` (file-header JSDoc → "Factory API choice: validator over RegExp") and in `docs/Handover-2.md` § Factory API choice.
 
-Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → nationalIds (it, uk, fr, es, pt) → dob → localePhones (fr, de, gb, it, es, pt) → intlPhone → domesticPhone**. (Under `profile: 'cv'` — v1.3, issue #64 — the `dob` step redacts only cue-labelled dates via `dobContextCuePattern`; every other step is unchanged.) This order is mandatory:
+Order of application in `sanitizePii`: **email → addresses (en, fr, de, it, es, pt) → postcodes (uk, fr, de, it, es, pt) → nationalIds (it, uk, fr, es, pt) → dob → localePhones (fr, de, gb, it, es, pt) → intlPhone → domesticPhone**. (Under `profile: 'cv'` — issue #64 — the `dob` step redacts only cue-labelled dates via `dobContextCuePattern`; every other step is unchanged.) This order is mandatory:
 
 - Addresses run **before** postcodes so a full structured address like `12 rue de la Paix, 75001 Paris` consumes the street run first; the residual `75001 Paris` is then redacted by the postcode pass.
 - Addresses also run **before** phone so the leading house number is not eaten by the phone pattern.
 - Postcodes run **before** phone — 5-digit continental postcodes and UK/PT alphanumerics are disjoint from every phone candidate, but ordering is pinned for future-proofing.
-- **National-IDs (R10 — v1.1) run after postcodes and before DOB.** PT NIF's bare 9-digit shape could otherwise eat the 5-digit portion of a postcode sequence; running PT NIF after postcodes guarantees postcodes are consumed first. National-IDs run before DOB so 15-digit NIRs and 16-char Codice Fiscales (which contain date-shaped digit substrings) are claimed whole before DOB tries its `DD[./-]MM[./-]YYYY` regex. The validator-factory pattern (extract candidate via bounded regex, then apply per-locale check-digit / HMRC invalid-prefix rules) keeps the false-positive rate acceptable on free CV text — see Patterns table for per-locale algorithm notes.
-- **DOB runs before phones (reordered in v1.1 for R2)** — v1.0.0 placed DOB last because the NANP regex could not mis-match `DD.MM.YYYY` sequences, but `libphonenumber-js`'s broader candidate-finder does recognise date-like digit sequences (`23.05.1985`, `1985-05-23`) as valid phone numbers in DE + other locales. DOB's regex is precise enough (anchored `\b`, specific separator alternation) that it cannot mis-match NANP or EU phone shapes, so flipping the order is safe. See `src/sanitize-pii.ts` header docblock (i)-(iii) rationale.
+- **National-IDs (R10) run after postcodes and before DOB.** PT NIF's bare 9-digit shape could otherwise eat the 5-digit portion of a postcode sequence; running PT NIF after postcodes guarantees postcodes are consumed first. National-IDs run before DOB so 15-digit NIRs and 16-char Codice Fiscales (which contain date-shaped digit substrings) are claimed whole before DOB tries its `DD[./-]MM[./-]YYYY` regex. The validator-factory pattern (extract candidate via bounded regex, then apply per-locale check-digit / HMRC invalid-prefix rules) keeps the false-positive rate acceptable on free CV text — see Patterns table for per-locale algorithm notes.
+- **DOB runs before phones (R2).** An earlier ordering placed DOB last, because the NANP regex could not mis-match `DD.MM.YYYY` sequences; but `libphonenumber-js`'s broader candidate-finder does recognise date-like digit sequences (`23.05.1985`, `1985-05-23`) as valid phone numbers in DE + other locales, so DOB must claim them first. DOB's regex is precise enough (anchored `\b`, specific separator alternation) that it cannot mis-match NANP or EU phone shapes, so this order is safe. See `src/sanitize-pii.ts` header docblock (i)-(iii) rationale.
 - **Locale-aware phones run before NANP fallback** — a FR number `06 12 34 56 78` must be consumed whole by the locale pass; the NANP regex could otherwise match a 3-3-4 substring and leave `06 ` dangling.
 
 Tests pin the ordering with adversarial fixtures (`src/__tests__/sanitize-pii.test.ts`, `src/__tests__/locale-patterns.test.ts`).
@@ -268,7 +268,7 @@ What this library deliberately or currently does not catch is recorded in [`docs
 
 Two tests time a fixed ~10 KB workload of mixed EU-style PII over 10 runs and print the mean as a `[measured] …` line — `src/__tests__/locale-patterns.test.ts` for the `sanitizePii` regex pipeline alone, and `src/__tests__/pii-middleware.test.ts` for `piiMiddleware.transformParams` end to end (which additionally pays the JSON deep clone and message traversal). Read the figures in `npm test` output or in the CI `test` job log. **Neither is a gate.** The thresholds they asserted until 2026-09-07 and why they were removed are in the record at § 4.1. The locale-aware phone pass adds six `findPhoneNumbersInText` calls per `sanitizePii` invocation; each is O(n) over the input and backed by `libphonenumber-js/min` metadata (~19KB gz).
 
-### Bundle size impact (v1.1 R2)
+### Bundle size impact (R2)
 
 `libphonenumber-js@1.12.41/min` adds ~89 KB uncompressed / ~21 KB gzipped to the runtime footprint (6.2 KB runtime JS + 82.5 KB metadata.min.json, gzipped to 1.6 KB + 19.1 KB). The `/min` bundle is selected over `/max` and `/mobile` because explicit default-country validation (as used here) does not require the full metadata table. Acceptable for a server-side middleware package; flagged for awareness on client-bundle use cases.
 
@@ -279,15 +279,15 @@ This package is a compliance control on the LLM prompt edge. A silent compromise
 - **S1 — `main` branch protection.** **Deferred under reduced-tier security posture (2026-04-19 decision, single-maintainer internal package — see `docs/Handover-35.md`).** Intent: required reviews ≥ 1, dismiss stale approvals, required status checks (lint, typecheck, test, redos-scan, audit, dependency-review), signed commits, linear history, block force push, plus CODEOWNERS gating `.github/`, `package.json`, `package-lock.json`, `src/patterns.ts`, `src/pii-middleware.ts`. Current state: `main` has no protection rules; solo-maintainer discipline relies on feature-branch workflow + per-PR CI gates. S1 will move to "in place" alongside S2 + S3 in a later sprint if the threat model shifts (external distribution, multi-maintainer).
 - **S2 — tag ruleset.** **Deferred under reduced-tier security posture (2026-04-19 decision, single-maintainer internal package — see `docs/Handover-35.md`).** Intent: a `v*.*.*` tag ruleset with restrict-deletions + restrict-updates (immutable) + maintainers-only authorship. Current state: tags are mutable / deletable by the sole maintainer without a ruleset. Consumers pin by exact tag per `docs/INTEGRITY.md`; tag immutability becomes meaningful only once external consumers share the threat surface. S2 will activate alongside S1 + S3 when posture escalates.
 - **S3 — GPG-signed tags.** **Deferred under reduced-tier security posture (2026-04-19 decision, single-maintainer internal package — see `docs/Handover-35.md`).** Intent is to cut every release tag with an annotated `git tag -s` signed by a dedicated Ed25519 hardware-token key (YubiKey 5 series) published in `docs/SIGNING-TAGS.md`. Current state: `git log v1.0.0 --show-signature` returns no signature line. Consumer-side `git log --show-signature` workflow documented in [`docs/INTEGRITY.md`](docs/INTEGRITY.md) for when S3 activates; until then it is a no-op. S3 will move to "in place" alongside S1 + S2 in a later sprint if the threat model shifts (external distribution, multi-maintainer).
-- **S4 — npm publish with provenance.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry publish step; consumers install directly from the git tag and build `dist/` via the `prepare` lifecycle script. Build integrity is the consumer's own CI concern (building from a pinned git tag is deterministic). If the package is later promoted to a registry for external distribution, the `publish.yml` workflow can be revived from git history at commit `877b478`.
+- **S4 — npm publish with provenance.** **Not applicable under the git-install architecture** (see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry publish step; consumers install directly from the git tag and build `dist/` via the `prepare` lifecycle script. Build integrity is the consumer's own CI concern (building from a pinned git tag is deterministic). If the package is later promoted to a registry for external distribution, the `publish.yml` workflow can be revived from git history at commit `877b478`.
 - **S5 — ReDoS scanner in CI.** `recheck` v4.x (NOT the unmaintained `safe-regex`) runs programmatically over `src/patterns.ts` via `scripts/redos-scan.mjs` as a required CI check. `eslint-plugin-redos@^4` also runs via `npm run lint`.
 - **S6 — dependency-review-action@v4.** Required CI check on every PR; fails on high/critical CVE or GPL-family licence.
 - **S7 — Dependabot.** Weekly npm + github-actions updates; no auto-merge (every bump goes through branch-protected PR).
 - **S8 — Socket.dev GitHub App.** Behavioural analysis of every new dep (install scripts, network access, filesystem writes, typosquat).
 - **S9 — Org 2FA enforcement.** `kgn-git` organisation enforces 2FA on all members.
-- **S10 — Consumer-side typosquat defence.** **Not applicable under the git-install architecture** (v1.0.0 onwards — see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry lookup, so typosquat on `npm.pkg.github.com` is not a threat surface. Replaced by consumer **exact-tag git-ref pinning** in `package.json` (e.g. `"@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#v1.0.0"`) — npm resolves the named tag from the pinned GitHub repo directly; no registry intermediary; upgrades are explicit PR-gated ref bumps.
-- **S12 — Runtime input-length cap (v1.1, issue #10).** Belt-and-braces ReDoS defence. Every call to `sanitizePii(text, options?)` enforces `text.length <= options.maxInputLength` (default `DEFAULT_MAX_INPUT_LENGTH` = 500_000 JS string code units, ~500 KB ASCII) with an O(1) gate that runs BEFORE any regex. Over-cap inputs throw `PiiInputTooLargeError` with numeric `.inputLength` and `.maxInputLength` props. `createPiiMiddleware({ maxInputLength })` threads the cap into every internal `sanitizePii` call applied to prompt / message-content / text-part / reasoning-part strings; the cap is enforced **per part** (one regex pass = one bounded cost), not summed across a prompt. Complements S5 (static `recheck` lint): S5 catches known super-linear shapes at CI time; S12 bounds worst-case CPU at runtime regardless of static-analysis gaps. Full design in `docs/adr/002-input-length-cap.md`.
-- **Kerckhoffs-aligned posture (v1.2+).** This package is designed to remain robust under public source disclosure. Redaction recall does not depend on attacker ignorance of pattern shapes — adversarial fixtures are part of the test suite (`src/__tests__/locale-patterns.test.ts`, cohort-benchmark tests), and code reviews exercise narrowing on attacker-aware bypass attempts. The visible pattern set is the contract; security-by-obscurity is not part of the threat model. This is the explicit Art. 32 framing for the public-source posture: "appropriate technical measures" remain in place when the source is open.
+- **S10 — Consumer-side typosquat defence.** **Not applicable under the git-install architecture** (see `docs/Handover-35.md` § Architecture pivot 2026-04-19). There is no npm registry lookup, so typosquat on `npm.pkg.github.com` is not a threat surface. Replaced by consumer **exact-tag git-ref pinning** in `package.json` (e.g. `"@kgn-git/privacy-utils": "github:kgn-git/ai-privacyutils#v1.0.0"`) — npm resolves the named tag from the pinned GitHub repo directly; no registry intermediary; upgrades are explicit PR-gated ref bumps.
+- **S12 — Runtime input-length cap (issue #10).** Belt-and-braces ReDoS defence. Every call to `sanitizePii(text, options?)` enforces `text.length <= options.maxInputLength` (default `DEFAULT_MAX_INPUT_LENGTH` = 500_000 JS string code units, ~500 KB ASCII) with an O(1) gate that runs BEFORE any regex. Over-cap inputs throw `PiiInputTooLargeError` with numeric `.inputLength` and `.maxInputLength` props. `createPiiMiddleware({ maxInputLength })` threads the cap into every internal `sanitizePii` call applied to prompt / message-content / text-part / reasoning-part strings; the cap is enforced **per part** (one regex pass = one bounded cost), not summed across a prompt. Complements S5 (static `recheck` lint): S5 catches known super-linear shapes at CI time; S12 bounds worst-case CPU at runtime regardless of static-analysis gaps. Full design in `docs/adr/002-input-length-cap.md`.
+- **Kerckhoffs-aligned posture.** This package is designed to remain robust under public source disclosure. Redaction recall does not depend on attacker ignorance of pattern shapes — adversarial fixtures are part of the test suite (`src/__tests__/locale-patterns.test.ts`, cohort-benchmark tests), and code reviews exercise narrowing on attacker-aware bypass attempts. The visible pattern set is the contract; security-by-obscurity is not part of the threat model. This is the explicit Art. 32 framing for the public-source posture: "appropriate technical measures" remain in place when the source is open.
 
 Security review history is recorded in this repo's commit log and `docs/Handover-N.md` series.
 
@@ -308,13 +308,13 @@ The package is compliance-critical — regressions in recall on canonical inputs
 | Pattern removal | **Major** |
 | Default replacement-token rename (e.g. flipping default from `[email]` to `<<REDACTED_EMAIL>>` — scheduled for v2.0 per issue #9) | **Major** |
 | Order-of-application reshuffling that changes output on fixtures | **Major** |
-| New pattern (e.g. national-ID in v1.1 for UK/FR/IT/ES/PT, DE in v1.2) | **Minor** |
-| New locale coverage (e.g. FR/DE/IT/ES/PT addresses in v1.1) | **Minor** |
-| New opt-in option that preserves the v1.0.0 default output byte-identically (e.g. `tokenFormat: 'sentinel'` in v1.1) | **Minor** |
+| New pattern (e.g. the national-ID validators for UK/FR/IT/ES/PT) | **Minor** |
+| New locale coverage (e.g. the FR/DE/IT/ES/PT addresses) | **Minor** |
+| New opt-in option that preserves the v1.0.0 default output byte-identically (e.g. `tokenFormat: 'sentinel'`) | **Minor** |
 | Pattern tuning — fewer false positives with same recall on all prior fixtures | **Patch** |
 | ReDoS-only rewrites that preserve byte-equivalent match behaviour on all fixtures | **Patch** |
 
-Every tag cuts from `main` via a signed annotated tag (see S3). The CHANGELOG records the fixture-level diff for every release.
+Every tag cuts from `main` via a signed annotated tag (see S3).
 
 ## API reference
 
@@ -324,8 +324,8 @@ Pure, one-way redaction. Idempotent. Empty input returns empty string. Non-PII i
 
 Options:
 
-- `options.tokenFormat?: 'readable' | 'sentinel'` (v1.1 — issue #9) — defaults to `'readable'` (v1.0.0 byte-identical). Pass `'sentinel'` for `<<REDACTED_X>>` low-collision tokens. See the Opt-in sentinel tokens section above.
-- `options.maxInputLength?: number` (v1.1 — issue #10) — defaults to `DEFAULT_MAX_INPUT_LENGTH` (500_000 JS string code units). Over-cap input throws `PiiInputTooLargeError` BEFORE any regex runs — belt-and-braces ReDoS defence, see S12 in Security posture and `docs/adr/002-input-length-cap.md`.
+- `options.tokenFormat?: 'readable' | 'sentinel'` (issue #9) — defaults to `'readable'` (v1.0.0 byte-identical). Pass `'sentinel'` for `<<REDACTED_X>>` low-collision tokens. See the Opt-in sentinel tokens section above.
+- `options.maxInputLength?: number` (issue #10) — defaults to `DEFAULT_MAX_INPUT_LENGTH` (500_000 JS string code units). Over-cap input throws `PiiInputTooLargeError` BEFORE any regex runs — belt-and-braces ReDoS defence, see S12 in Security posture and `docs/adr/002-input-length-cap.md`.
 
 Throws: `PiiInputTooLargeError` when `text.length > maxInputLength`. The error carries numeric `.inputLength` and `.maxInputLength` props and is an `instanceof Error`.
 
@@ -333,14 +333,14 @@ Throws: `PiiInputTooLargeError` when `text.length > maxInputLength`. The error c
 
 ### `piiPatterns`
 
-Dictionary of named **factory functions** (v1.1 shape):
+Dictionary of named **factory functions**:
 
 - `piiPatterns.email` — email factory.
 - `piiPatterns.address` — English address factory (alias for `piiPatterns.addressByLocale.en`; retained for v1.0.0 consumer backward-compat).
-- `piiPatterns.addressByLocale.{en,fr,de,it,es,pt}` — per-locale address factories (new in v1.1).
-- `piiPatterns.postcodeByLocale.{uk,fr,de,it,es,pt}` — per-locale bare-postcode factories (new in v1.1).
-- `piiPatterns.phoneByLocale.{fr,de,uk,it,es,pt}` — per-locale phone validator factories (new in v1.1, validator function shape).
-- `piiPatterns.nationalIdByLocale.{uk,fr,it,es,pt}` — per-locale national-ID validator factories (new in v1.1, R10 — validator function shape; check-digit gating where applicable, regex-only for UK NINO).
+- `piiPatterns.addressByLocale.{en,fr,de,it,es,pt}` — per-locale address factories.
+- `piiPatterns.postcodeByLocale.{uk,fr,de,it,es,pt}` — per-locale bare-postcode factories.
+- `piiPatterns.phoneByLocale.{fr,de,uk,it,es,pt}` — per-locale phone validator factories (validator function shape).
+- `piiPatterns.nationalIdByLocale.{uk,fr,it,es,pt}` — per-locale national-ID validator factories (R10 — validator function shape; check-digit gating where applicable, regex-only for UK NINO).
 - `piiPatterns.phoneInternational`, `piiPatterns.phoneDomestic` — NANP-shape phone factories.
 - `piiPatterns.dob` — DOB factory.
 
@@ -369,7 +369,7 @@ const mw = createPiiMiddleware({
 });
 ```
 
-The `maxInputLength` cap (v1.1 — issue #10) applies per individual text string (each string prompt, each string message content, each text / reasoning part) — NOT summed across all parts of a prompt. Over-cap content causes `sanitizePii` to throw `PiiInputTooLargeError`, which propagates unwrapped out of `transformParams`.
+The `maxInputLength` cap (issue #10) applies per individual text string (each string prompt, each string message content, each text / reasoning part) — NOT summed across all parts of a prompt. Over-cap content causes `sanitizePii` to throw `PiiInputTooLargeError`, which propagates unwrapped out of `transformParams`.
 
 See also: `TOKEN_FORMATS` (constant), `tokensFor(format)` (resolver helper), and the `TokenFormat` / `TokenKind` / `PiiMiddlewareOptions` / `SanitizePiiOptions` type exports. `PiiInputTooLargeError` (class) and `DEFAULT_MAX_INPUT_LENGTH` (const) are exported from the top-level package.
 

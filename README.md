@@ -147,7 +147,7 @@ The cohort-1 (Western European) gate is enforced as CI BLOCKING; cohorts 2–4 +
 
 ### CV redaction profile (issue #64)
 
-A single, one-size-fits-all policy **over-redacts on CV / résumé text**: (a) every date-shaped string is redacted to `[dob]` — destroying employment start/end dates — and (b) surname-shaped employer names (`Morgan Stanley`, `Ericsson`) are mis-tagged as persons and redacted to `[person]`. Employment dates, employer/organisation names and city/region are the highest-signal **non-personal** features a downstream embedding / job-match consumer depends on (see `jobflow-platform#1424`).
+The `'default'` profile's one-size-fits-all policy **over-redacts on CV / résumé text**: (a) every date-shaped string is redacted to `[dob]` — destroying employment start/end dates — and (b) surname-shaped employer names (`Morgan Stanley`, `Ericsson`) are mis-tagged as persons and redacted to `[person]`. Employment dates, employer/organisation names and city/region are the highest-signal **non-personal** features a downstream embedding / job-match consumer depends on (see `jobflow-platform#1424`).
 
 The `profile` option is additive. The `'default'` profile is **byte-identical to the behaviour before profiles existed** on every input, so existing consumers are unaffected. Opt into `'cv'` for CV/embedding text:
 
@@ -314,7 +314,7 @@ The package is compliance-critical — regressions in recall on canonical inputs
 | Pattern tuning — fewer false positives with same recall on all prior fixtures | **Patch** |
 | ReDoS-only rewrites that preserve byte-equivalent match behaviour on all fixtures | **Patch** |
 
-Every tag cuts from `main` via a signed annotated tag (see S3).
+Every tag cuts from `main` via an annotated tag; signing them is the deferred S3 intent, not current practice.
 
 ## API reference
 
